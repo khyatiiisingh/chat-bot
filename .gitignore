@@ -1,0 +1,47 @@
+# Byte-compiled / cached files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+*.venv
+
+# Logs and local settings
+logs/
+*.log
+*.out
+*.err
+.DS_Store
+*.swp
+*.swo
+
+# Environment variables & secrets
+.env
+*.ini
+*.cfg
+*.json
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Package builds
+build/
+dist/
+*.egg-info/
+
+# Testing & coverage
+.coverage
+*.cover
+coverage.xml
+htmlcov/
+nosetests.xml
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.iml
+
+# MacOS system files
+.DS_Store
