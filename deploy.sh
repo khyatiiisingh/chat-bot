@@ -1,13 +1,13 @@
 #!/bin/bash
 
 echo "deleting old app"
-sudo rm -rf /var/www/
+sudo rm -rf /var/www/langchain-app
 
 echo "creating app folder"
 sudo mkdir -p /var/www/langchain-app 
 
 echo "moving files to app folder"
-sudo mv  * /var/www/langchain-app
+sudo mv * /var/www/langchain-app
 
 # Navigate to the app directory
 cd /var/www/langchain-app/
@@ -50,12 +50,11 @@ else
 fi
 
 # Stop any existing Gunicorn process
-sudo pkill gunicorn
+sudo pkill gunicorn || true
 sudo rm -rf myapp.sock
 
-# # Start Gunicorn with the Flask application
-# # Replace 'server:app' with 'yourfile:app' if your Flask instance is named differently.
-# # gunicorn --workers 3 --bind 0.0.0.0:8000 server:app &
+# Start Gunicorn with the FastAPI application
 echo "starting gunicorn"
-sudo gunicorn --workers 3 --bind unix:myapp.sock  app:app --user www-data --group www-data --daemon
+cd /var/www/langchain-app/
+sudo gunicorn --workers 3 --bind unix:myapp.sock app:api --user www-data --group www-data --daemon
 echo "started gunicorn 🚀"

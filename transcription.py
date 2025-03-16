@@ -13,7 +13,7 @@ def load_transcript():
     """Load the cleaned transcript file."""
     if not os.path.exists(TRANSCRIPT_FILE):
         return ""
-    
+   
     with open(TRANSCRIPT_FILE, "r", encoding="utf-8") as f:
         return f.read().strip()
 
@@ -42,7 +42,7 @@ def get_conversation_chain(vectorstore, api_key):
         api_key=api_key
     )
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    
+   
     return ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
@@ -59,7 +59,7 @@ def initialize_conversation_chain(api_key):
     raw_text = load_transcript()
     if not raw_text:
         return None
-    
+   
     text_chunks = get_text_chunks(raw_text)
     vectorstore = get_vectorstore(text_chunks, api_key)
     return get_conversation_chain(vectorstore, api_key)
