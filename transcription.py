@@ -39,7 +39,8 @@ def get_conversation_chain(vectorstore, api_key):
     """Set up the conversational AI chain with memory."""
     llm = ChatGoogleGenerativeAI(
         model='gemini-1.5-pro-latest',
-        api_key=api_key
+        api_key=api_key,
+        convert_system_message_to_human=True
     )
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
    
