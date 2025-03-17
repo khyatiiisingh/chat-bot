@@ -16,17 +16,17 @@ jobs:
       - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{secrets.EC2_SSH_KEY}}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan ${{secrets.EC2_HOST}} >> ~/.ssh/known_hosts
           # Test SSH connection to make sure it works
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
+          ssh -o StrictHostKeyChecking=no ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}} "echo SSH connection successful"
 
       - name: Create .env file dynamically 🧨
         env:
-          ENV: ${{ secrets.ENV }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          ENV: ${{secrets.ENV}}
+          EC2_USERNAME: ${{secrets.EC2_USERNAME}}
+          GOOGLE_API_KEY: ${{secrets.GOOGLE_API_KEY}}
         run: |
           echo "ENV=${ENV:-production}" >> env
           echo "EC2_USERNAME=${EC2_USERNAME}" >> env
@@ -181,21 +181,21 @@ REQUIREMENTS_EOF
 
       - name: Copy files to remote server 🚙
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_HOST: ${{secrets.EC2_HOST}}
+          EC2_USERNAME: ${{secrets.EC2_USERNAME}}
         run: |
           echo "Files to copy:"
           ls -la
           
           echo "Copying files to remote server"
-          scp -r app.py transcription.py requirements.txt env deploy.sh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
+          scp -r app.py transcription.py requirements.txt env deploy.sh ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}}:~/
 
       - name: Run Bash Script To Deploy App 🚀
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_HOST: ${{secrets.EC2_HOST}}
+          EC2_USERNAME: ${{secrets.EC2_USERNAME}}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
+          ssh -o StrictHostKeyChecking=no ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}} "chmod +x ./deploy.sh && ./deploy.sh"
 
       - name: Clean up SSH key 🚀
         if: always()
