@@ -78,7 +78,7 @@ jobs:
 
       - name: Create deploy.sh script 🚀
         run: |
-          cat > deploy.sh << 'EOF'
+          cat > deploy.sh << 'DEPLOY_EOF'
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -222,7 +222,7 @@ curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding o
 
 echo "=== Deployment complete ==="
 echo "Check application logs at: /var/www/langchain-app/gunicorn.log"
-EOF
+DEPLOY_EOF
 
       - name: Copy files to remote server 🚙
         env:
