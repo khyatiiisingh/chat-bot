@@ -44,19 +44,17 @@ fi
 # Verify transcript file exists
 if [ ! -f cleaned_transcript.txt ]; then
     echo "WARNING: transcript file not found, creating sample file"
-    cat > cleaned_transcript.txt << 'EOF'
-Welcome to today's lecture on Artificial Intelligence and Machine Learning.
-This is a sample transcript file created during deployment.
-AI systems can analyze data, learn patterns, and make decisions.
-Machine learning is a subset of AI focused on building systems that learn from data.
-Deep learning uses neural networks with multiple layers.
-Natural language processing allows computers to understand human language.
-Computer vision enables machines to interpret and make decisions based on visual data.
-Reinforcement learning involves training agents to make sequences of decisions.
-Ethics in AI is important to ensure responsible development and deployment.
-Bias in AI systems can lead to unfair outcomes and must be addressed.
-The future of AI includes advancements in autonomous systems and general intelligence.
-EOF
+    echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
+    echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
+    echo "AI systems can analyze data, learn patterns, and make decisions." >> cleaned_transcript.txt
+    echo "Machine learning is a subset of AI focused on building systems that learn from data." >> cleaned_transcript.txt
+    echo "Deep learning uses neural networks with multiple layers." >> cleaned_transcript.txt
+    echo "Natural language processing allows computers to understand human language." >> cleaned_transcript.txt
+    echo "Computer vision enables machines to interpret and make decisions based on visual data." >> cleaned_transcript.txt
+    echo "Reinforcement learning involves training agents to make sequences of decisions." >> cleaned_transcript.txt
+    echo "Ethics in AI is important to ensure responsible development and deployment." >> cleaned_transcript.txt
+    echo "Bias in AI systems can lead to unfair outcomes and must be addressed." >> cleaned_transcript.txt
+    echo "The future of AI includes advancements in autonomous systems and general intelligence." >> cleaned_transcript.txt
     echo "Sample transcript file created"
 fi
 
@@ -74,85 +72,13 @@ python3 -m venv venv
 echo "Python interpreter being used:"
 which python3
 
-# Create a requirements-minimal.txt without problematic packages
-cat > requirements-minimal.txt << EOF
-streamlit==1.32.0
-fastapi==0.109.2
-uvicorn==0.27.1
-pydantic==2.5.2
-# Use compatible versions for langchain and langchain_community
-langchain==0.1.0
-langchain_community==0.0.14
-langchain_google_genai==0.0.6
-python-dotenv==1.0.0
-gunicorn==21.2.0
-EOF
-
-# Install minimal requirements
+# Install Python packages in virtual environment
 echo "Installing Python packages in virtual environment"
 python3 -m pip install --upgrade pip setuptools wheel
 python3 -m pip install uvicorn[standard]
-python3 -m pip install -r requirements-minimal.txt
-
-# Create a simple script to verify if we need faiss-cpu
-echo "Installing system alternatives for problematic packages"
-python3 -c "
-import sys
-try:
-    print('Importing numpy...')
-    import numpy
-    print('Numpy imported successfully')
-    
-    # Use system python3-pillow
-    print('Setting up PIL path...')
-    import site
-    site.addsitedir('/usr/lib/python3/dist-packages')
-    print('Importing PIL...')
-    from PIL import Image
-    print('PIL imported successfully:', Image.__version__)
-    
-    # Try setting up faiss-cpu
-    try:
-        print('Importing faiss...')
-        import faiss
-        print('Faiss imported successfully')
-    except ImportError:
-        print('Faiss not found, using nearest-neighbor alternative')
-        # Install scikit-learn as an alternative
-        import subprocess
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'scikit-learn'])
-        print('Installed scikit-learn as alternative')
-        
-        # Create faiss.py wrapper (simplified version for basic nearest neighbor search)
-        with open('faiss.py', 'w') as f:
-            f.write('''
-# Simplified faiss alternative using scikit-learn
-import numpy as np
-from sklearn.neighbors import NearestNeighbors
-
-class IndexFlatL2:
-    def __init__(self, d):
-        self.d = d
-        self.nn = None
-        self.data = None
-    
-    def add(self, vectors):
-        self.data = vectors
-        self.nn = NearestNeighbors(n_neighbors=5, algorithm='auto', metric='l2')
-        self.nn.fit(vectors)
-    
-    def search(self, query, k):
-        distances, indices = self.nn.kneighbors(query, n_neighbors=k)
-        return distances, indices
-
-def index_factory(d, description):
-    return IndexFlatL2(d)
-''')
-            print('Created faiss alternative')
-except Exception as e:
-    print('Error in setup:', e)
-    sys.exit(1)
-"
+python3 -m pip install fastapi==0.109.2 streamlit==1.32.0 pydantic==2.5.2
+python3 -m pip install langchain==0.1.0 langchain_community==0.0.14 langchain_google_genai==0.0.6
+python3 -m pip install python-dotenv==1.0.0 gunicorn==21.2.0 scikit-learn
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
