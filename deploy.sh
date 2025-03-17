@@ -55,7 +55,7 @@ if [ -f requirements.txt ]; then
     sudo pip3 install -r requirements.txt
 else
     echo "WARNING: requirements.txt not found, installing essential packages"
-    sudo pip3 install streamlit langchain langchain_google_genai langchain_community faiss-cpu python-dotenv fastapi uvicorn gunicorn pydantic
+    sudo pip3 install streamlit==1.32.0 fastapi==0.109.2 uvicorn==0.27.1 pydantic==2.5.2 langchain==0.1.4 langchain_google_genai==0.0.6 langchain_community==0.0.13 faiss-cpu==1.7.4 python-dotenv==1.0.0 gunicorn==21.2.0
 fi
 
 # Create sample transcript if not exists
