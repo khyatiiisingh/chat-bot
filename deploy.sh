@@ -44,26 +44,37 @@ fi
 # Install system dependencies
 echo "Installing system dependencies"
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-dev python3-venv nginx
+sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-full nginx
+
+# Install Pillow dependencies
+echo "Installing Pillow dependencies"
+sudo apt-get install -y libpng-dev libjpeg-dev libtiff-dev libfreetype6-dev
+
+# Install FAISS dependencies
+echo "Installing FAISS dependencies"
+sudo apt-get install -y build-essential libssl-dev swig python3-dev libblas-dev liblapack-dev gfortran cmake
 
 # Create and activate virtual environment
 echo "Setting up Python virtual environment"
-sudo apt-get install -y python3-full
 python3 -m venv venv
 source venv/bin/activate
+
+# Upgrade pip and setuptools
+echo "Upgrading pip and setuptools"
+pip install --upgrade pip setuptools wheel
 
 # Install Python dependencies in virtual environment
 echo "Installing Python dependencies in virtual environment"
 if [ -f requirements.txt ]; then
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 else
     echo "WARNING: requirements.txt not found, installing essential packages"
-    pip install streamlit fastapi uvicorn pydantic langchain langchain_google_genai langchain_community faiss-cpu python-dotenv gunicorn
+    pip install --no-cache-dir streamlit fastapi uvicorn pydantic langchain langchain_google_genai langchain_community faiss-cpu python-dotenv gunicorn
 fi
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
-cat > /tmp/nginx_config << EOF
+cat > /tmp/nginx_config << NGINX_EOF
 server {
     listen 80;
     server_name _;
@@ -76,7 +87,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-EOF
+NGINX_EOF
 sudo cp /tmp/nginx_config /etc/nginx/sites-available/chatbaot
 rm /tmp/nginx_config
 
@@ -87,7 +98,7 @@ sudo systemctl restart nginx
 
 # Create a systemd service file for the application
 echo "Creating systemd service for CHATBAOT"
-cat > /tmp/chatbaot.service << EOF
+cat > /tmp/chatbaot.service << SERVICE_EOF
 [Unit]
 Description=CHATBAOT Gunicorn Service
 After=network.target
@@ -102,7 +113,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICE_EOF
 sudo cp /tmp/chatbaot.service /etc/systemd/system/
 rm /tmp/chatbaot.service
 
