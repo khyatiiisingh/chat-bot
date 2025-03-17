@@ -38,7 +38,7 @@ jobs:
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
-echo "=== Starting deployment process ==="
+# echo "=== Starting deployment process ==="
 
 # Create destination directory with proper permissions
 echo "Setting up app directory"
@@ -46,7 +46,7 @@ sudo mkdir -p /var/www/CHATBAOT
 sudo chown \$(whoami):\$(whoami) /var/www/CHATBAOT
 
 # Show files that will be deployed
-echo "Files to be deployed:"
+echo 'Files to be deployed:"
 ls -la
 
 # Remove old app contents while preserving any logs
