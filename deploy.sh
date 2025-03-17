@@ -1,14 +1,46 @@
 #!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+
 echo "=== Starting deployment process ==="
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+echo "Deployment started at: $(date)"
 
-echo "Deleting old app"
-sudo rm -rf /var/www/langchain-app
+# Create backup directory if needed
+BACKUP_DIR="/home/ubuntu/app_backups"
+mkdir -p $BACKUP_DIR
 
-echo "Creating app folder"
+# Backup existing app if it exists
+if [ -d "/var/www/langchain-app" ]; then
+    echo "Backing up existing application"
+    sudo tar -czf "$BACKUP_DIR/app_backup_$TIMESTAMP.tar.gz" -C /var/www langchain-app 2>/dev/null || echo "No existing app to backup"
+fi
+
+# Create destination directory with proper permissions
+echo "Setting up app directory"
 sudo mkdir -p /var/www/langchain-app
+sudo chown $(whoami):$(whoami) /var/www/langchain-app
+
+# Show files that will be deployed
+echo "Files to be deployed:"
+ls -la
+
+# Remove old app contents while preserving any logs
+if [ -f /var/www/langchain-app/gunicorn.log ]; then
+    echo "Preserving existing logs"
+    sudo cp /var/www/langchain-app/gunicorn.log /tmp/gunicorn.log.backup
+fi
+
+echo "Removing old app contents"
+sudo rm -rf /var/www/langchain-app/*
 
 echo "Moving files to app folder"
 sudo cp -r * /var/www/langchain-app/
+sudo chown -R $(whoami):$(whoami) /var/www/langchain-app
+
+# Restore logs if they existed
+if [ -f /tmp/gunicorn.log.backup ]; then
+    sudo mv /tmp/gunicorn.log.backup /var/www/langchain-app/gunicorn.log
+fi
 
 # Navigate to the app directory
 cd /var/www/langchain-app/
@@ -23,7 +55,9 @@ else
 fi
 
 # Update system packages
+echo "Updating system packages"
 sudo apt-get update
+
 echo "Installing python and pip"
 sudo apt-get install -y python3 python3-pip python3-dev
 
@@ -71,6 +105,10 @@ EOF'
 sudo ln -sf /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled
 sudo rm -f /etc/nginx/sites-enabled/default
 
+# Validate nginx config
+echo "Validating Nginx configuration"
+sudo nginx -t
+
 # Restart Nginx
 echo "Restarting Nginx"
 sudo systemctl restart nginx
@@ -79,8 +117,7 @@ sudo systemctl restart nginx
 echo "Stopping any existing Gunicorn processes"
 sudo pkill gunicorn || true
 
-# Create a simplified test FastAPI app to verify setup
-echo "Creating a test app.py if needed"
+# Create a minimal test app.py if needed
 if [ ! -f app.py ]; then
     echo "WARNING: app.py not found, creating test version"
     cat > app.py <<EOF
@@ -98,18 +135,29 @@ def health_check():
 EOF
 fi
 
-# Start Gunicorn with HTTP binding (not Unix socket)
+echo "Directory contents:"
+ls -la
+
+# Start Gunicorn with HTTP binding
 echo "Starting Gunicorn with HTTP binding"
 cd /var/www/langchain-app/
 nohup sudo gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120 > gunicorn.log 2>&1 &
 
 # Give Gunicorn time to start
 echo "Waiting for Gunicorn to start..."
-sleep 5
+sleep 10
 
 # Verify the app is running
 echo "Verifying application is running"
-curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding on port 8000"
+if curl -s http://127.0.0.1:8000/; then
+    echo "✅ Application is running successfully!"
+else
+    echo "⚠️ WARNING: Application is not responding on port 8000"
+    echo "Checking logs for errors:"
+    tail -n 50 gunicorn.log
+fi
 
 echo "=== Deployment complete ==="
-echo "Check application logs at: /var/www/langchain-app/gunicorn.log"
+echo "Application deployed to: /var/www/langchain-app/"
+echo "Log file location: /var/www/langchain-app/gunicorn.log"
+echo "Access your application at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
