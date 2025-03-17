@@ -1,4 +1,4 @@
-name: Deploy to EC2 🚀
+name: Deploy CHATBAOT to EC2 🚀
 on:
   push:
     branches:
@@ -42,33 +42,33 @@ echo "=== Starting deployment process ==="
 
 # Create destination directory with proper permissions
 echo "Setting up app directory"
-sudo mkdir -p /var/www/langchain-app
-sudo chown $(whoami):$(whoami) /var/www/langchain-app
+sudo mkdir -p /var/www/CHATBAOT
+sudo chown $(whoami):$(whoami) /var/www/CHATBAOT
 
 # Show files that will be deployed
 echo "Files to be deployed:"
 ls -la
 
 # Remove old app contents while preserving any logs
-if [ -f /var/www/langchain-app/gunicorn.log ]; then
+if [ -f /var/www/CHATBAOT/gunicorn.log ]; then
     echo "Preserving existing logs"
-    sudo cp /var/www/langchain-app/gunicorn.log /tmp/gunicorn.log.backup
+    sudo cp /var/www/CHATBAOT/gunicorn.log /tmp/gunicorn.log.backup
 fi
 
 echo "Removing old app contents"
-sudo rm -rf /var/www/langchain-app/*
+sudo rm -rf /var/www/CHATBAOT/*
 
 echo "Moving files to app folder"
-sudo cp -r * /var/www/langchain-app/
-sudo chown -R $(whoami):$(whoami) /var/www/langchain-app
+sudo cp -r * /var/www/CHATBAOT/
+sudo chown -R $(whoami):$(whoami) /var/www/CHATBAOT
 
 # Restore logs if they existed
 if [ -f /tmp/gunicorn.log.backup ]; then
-    sudo mv /tmp/gunicorn.log.backup /var/www/langchain-app/gunicorn.log
+    sudo mv /tmp/gunicorn.log.backup /var/www/CHATBAOT/gunicorn.log
 fi
 
 # Navigate to the app directory
-cd /var/www/langchain-app/
+cd /var/www/CHATBAOT/
 
 # Ensure the .env file exists
 if [ -f env ]; then
@@ -111,7 +111,7 @@ fi
 
 # Configure Nginx
 echo "Configuring Nginx for HTTP proxy"
-sudo tee /etc/nginx/sites-available/myapp > /dev/null << 'NGINX_CONFIG'
+sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << 'NGINX_CONFIG'
 server {
     listen 80;
     server_name _;
@@ -127,7 +127,7 @@ server {
 NGINX_CONFIG
 
 # Enable the site
-sudo ln -sf /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled
+sudo ln -sf /etc/nginx/sites-available/chatbaot /etc/nginx/sites-enabled
 sudo rm -f /etc/nginx/sites-enabled/default
 
 # Validate nginx config
@@ -147,7 +147,7 @@ ls -la
 
 # Start Gunicorn with HTTP binding
 echo "Starting Gunicorn with HTTP binding"
-cd /var/www/langchain-app/
+cd /var/www/CHATBAOT/
 nohup sudo gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120 > gunicorn.log 2>&1 &
 
 # Give Gunicorn time to start
@@ -159,7 +159,7 @@ echo "Verifying application is running"
 curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding on port 8000"
 
 echo "=== Deployment complete ==="
-echo "Check application logs at: /var/www/langchain-app/gunicorn.log"
+echo "Check application logs at: /var/www/CHATBAOT/gunicorn.log"
 DEPLOY_EOF
 
       - name: Create requirements.txt if not exists
