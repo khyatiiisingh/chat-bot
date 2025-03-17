@@ -45,55 +45,48 @@ fi
 echo "Installing system dependencies"
 sudo apt-get update
 sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-full nginx
+sudo apt-get install -y libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev libopenblas-dev
 
-# Install additional system dependencies needed for Pillow and FAISS
-echo "Installing additional dependencies for Python packages"
-sudo apt-get install -y \
-    libjpeg-dev \
-    zlib1g-dev \
-    libpng-dev \
-    libfreetype6-dev \
-    libopenblas-dev \
-    libblas-dev \
-    liblapack-dev \
-    gfortran \
-    python3-pillow
-
-# Create and activate virtual environment
-echo "Setting up Python virtual environment"
+# Ensure we're not in a subshell that would lose the virtual environment activation
+echo "Creating and activating Python virtual environment"
+rm -rf venv
 python3 -m venv venv
-source venv/bin/activate
+. ./venv/bin/activate
 
-# Upgrade pip and setuptools
-echo "Upgrading pip and setuptools"
-pip install --upgrade pip setuptools wheel
+# Verify we're in the virtual environment
+echo "Python interpreter being used:"
+which python3
 
-# Install specific packages first using system packages if possible
-echo "Installing specific packages first"
-pip install --no-cache-dir streamlit fastapi uvicorn pydantic gunicorn python-dotenv
+# Upgrade pip
+python3 -m pip install --upgrade pip setuptools wheel
 
-# Try to install problematic packages with alternatives
-echo "Trying to install potentially problematic packages"
-pip install --no-cache-dir --only-binary=:all: faiss-cpu || {
-    echo "Installing FAISS from source (this may take a while)"
-    CFLAGS="-mavx2" pip install --no-cache-dir faiss-cpu
-}
+# Install packages one by one
+echo "Installing packages individually"
+python3 -m pip install streamlit
+python3 -m pip install fastapi
+python3 -m pip install uvicorn
+python3 -m pip install pydantic
+python3 -m pip install python-dotenv
+python3 -m pip install gunicorn
 
-# Try using system pillow or install a specific version
-pip install --no-cache-dir pillow==9.5.0 || {
-    echo "Installing Pillow alternative"
-    pip install --no-cache-dir pillow --global-option="build_ext" --global-option="--disable-jpeg"
-}
+# Install the potentially problematic packages
+echo "Installing potentially problematic packages"
+python3 -m pip install pillow || echo "Note: Pillow installation had warnings but may still work"
+python3 -m pip install faiss-cpu || echo "Note: FAISS installation had warnings but may still work"
 
-# Now install langchain packages
+# Install langchain packages
 echo "Installing LangChain packages"
-pip install --no-cache-dir langchain==0.1.4
-pip install --no-cache-dir langchain_google_genai==0.0.6
-pip install --no-cache-dir langchain_community==0.0.13
+python3 -m pip install langchain
+python3 -m pip install langchain_google_genai
+python3 -m pip install langchain_community
+
+# Verify installations
+echo "Checking installed packages:"
+python3 -m pip list
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
-cat > /tmp/nginx_config << NGINX_EOF
+cat > /tmp/nginx_config << EOF
 server {
     listen 80;
     server_name _;
@@ -106,7 +99,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-NGINX_EOF
+EOF
 sudo cp /tmp/nginx_config /etc/nginx/sites-available/chatbaot
 rm /tmp/nginx_config
 
@@ -117,7 +110,7 @@ sudo systemctl restart nginx
 
 # Create a systemd service file for the application
 echo "Creating systemd service for CHATBAOT"
-cat > /tmp/chatbaot.service << SERVICE_EOF
+cat > /tmp/chatbaot.service << EOF
 [Unit]
 Description=CHATBAOT Gunicorn Service
 After=network.target
@@ -132,7 +125,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-SERVICE_EOF
+EOF
 sudo cp /tmp/chatbaot.service /etc/systemd/system/
 rm /tmp/chatbaot.service
 
