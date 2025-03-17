@@ -51,10 +51,6 @@ if [ ! -f cleaned_transcript.txt ]; then
     echo "Deep learning uses neural networks with multiple layers." >> cleaned_transcript.txt
     echo "Natural language processing allows computers to understand human language." >> cleaned_transcript.txt
     echo "Computer vision enables machines to interpret and make decisions based on visual data." >> cleaned_transcript.txt
-    echo "Reinforcement learning involves training agents to make sequences of decisions." >> cleaned_transcript.txt
-    echo "Ethics in AI is important to ensure responsible development and deployment." >> cleaned_transcript.txt
-    echo "Bias in AI systems can lead to unfair outcomes and must be addressed." >> cleaned_transcript.txt
-    echo "The future of AI includes advancements in autonomous systems and general intelligence." >> cleaned_transcript.txt
     echo "Sample transcript file created"
 fi
 
