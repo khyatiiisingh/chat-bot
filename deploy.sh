@@ -51,18 +51,17 @@ sudo apt-get install -y python3 python3-pip python3-dev
 
 # Ensure requirements.txt exists
 if [ ! -f requirements.txt ]; then
-  cat > requirements.txt << 'REQUIREMENTS_EOF'
-streamlit==1.32.0
-fastapi==0.109.2
-uvicorn==0.27.1
-pydantic==2.5.2
-langchain==0.1.4
-langchain_google_genai==0.0.6
-langchain_community==0.0.13
-faiss-cpu==1.7.4
-python-dotenv==1.0.0
-gunicorn==21.2.0
-REQUIREMENTS_EOF
+    echo "Creating requirements.txt..."
+    echo "streamlit==1.32.0" > requirements.txt
+    echo "fastapi==0.109.2" >> requirements.txt
+    echo "uvicorn==0.27.1" >> requirements.txt
+    echo "pydantic==2.5.2" >> requirements.txt
+    echo "langchain==0.1.4" >> requirements.txt
+    echo "langchain_google_genai==0.0.6" >> requirements.txt
+    echo "langchain_community==0.0.13" >> requirements.txt
+    echo "faiss-cpu==1.7.4" >> requirements.txt
+    echo "python-dotenv==1.0.0" >> requirements.txt
+    echo "gunicorn==21.2.0" >> requirements.txt
 fi
 
 # Install application dependencies
