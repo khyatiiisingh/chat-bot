@@ -72,9 +72,9 @@ sudo pip3 install -r requirements.txt
 
 # Create sample transcript if not exists
 if [ ! -f cleaned_transcript.txt ]; then
-    # echo "Creating sample transcript file"
-    # echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
-    # echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
+    echo "Creating sample transcript file"
+    echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
+    echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
 fi
 
 # Install and configure Nginx
