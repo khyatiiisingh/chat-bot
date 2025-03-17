@@ -41,15 +41,13 @@ else
     touch .env
 fi
 
-# Install system dependencies
-echo "Installing system dependencies"
+# Install system dependencies and Python packages
+echo "Installing system dependencies and Python packages"
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-full nginx
-sudo apt-get install -y libjpeg-dev zlib1g-dev libpng-dev libfreetype6-dev libopenblas-dev
+sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-pillow python3-numpy python3-scipy nginx
 
-# Ensure we're not in a subshell that would lose the virtual environment activation
-echo "Creating and activating Python virtual environment"
-rm -rf venv
+# Create and activate Python virtual environment
+echo "Creating Python virtual environment"
 python3 -m venv venv
 . ./venv/bin/activate
 
@@ -57,32 +55,83 @@ python3 -m venv venv
 echo "Python interpreter being used:"
 which python3
 
-# Upgrade pip
+# Create a requirements-minimal.txt without problematic packages
+cat > requirements-minimal.txt << EOF
+streamlit==1.32.0
+fastapi==0.109.2
+uvicorn==0.27.1
+pydantic==2.5.2
+langchain==0.1.4
+langchain_google_genai==0.0.6
+langchain_community==0.0.13
+python-dotenv==1.0.0
+gunicorn==21.2.0
+EOF
+
+# Install minimal requirements
+echo "Installing Python packages in virtual environment"
 python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install -r requirements-minimal.txt
 
-# Install packages one by one
-echo "Installing packages individually"
-python3 -m pip install streamlit
-python3 -m pip install fastapi
-python3 -m pip install uvicorn
-python3 -m pip install pydantic
-python3 -m pip install python-dotenv
-python3 -m pip install gunicorn
+# Create a simple script to verify if we need faiss-cpu
+echo "Installing system alternatives for problematic packages"
+python3 -c "
+import sys
+try:
+    print('Importing numpy...')
+    import numpy
+    print('Numpy imported successfully')
+    
+    # Use system python3-pillow
+    print('Setting up PIL path...')
+    import site
+    site.addsitedir('/usr/lib/python3/dist-packages')
+    print('Importing PIL...')
+    from PIL import Image
+    print('PIL imported successfully:', Image.__version__)
+    
+    # Try setting up faiss-cpu
+    try:
+        print('Importing faiss...')
+        import faiss
+        print('Faiss imported successfully')
+    except ImportError:
+        print('Faiss not found, using nearest-neighbor alternative')
+        # Install scikit-learn as an alternative
+        import subprocess
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'scikit-learn'])
+        print('Installed scikit-learn as alternative')
+        
+        # Create faiss.py wrapper (simplified version for basic nearest neighbor search)
+        with open('faiss.py', 'w') as f:
+            f.write('''
+# Simplified faiss alternative using scikit-learn
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
-# Install the potentially problematic packages
-echo "Installing potentially problematic packages"
-python3 -m pip install pillow || echo "Note: Pillow installation had warnings but may still work"
-python3 -m pip install faiss-cpu || echo "Note: FAISS installation had warnings but may still work"
+class IndexFlatL2:
+    def __init__(self, d):
+        self.d = d
+        self.nn = None
+        self.data = None
+    
+    def add(self, vectors):
+        self.data = vectors
+        self.nn = NearestNeighbors(n_neighbors=5, algorithm='auto', metric='l2')
+        self.nn.fit(vectors)
+    
+    def search(self, query, k):
+        distances, indices = self.nn.kneighbors(query, n_neighbors=k)
+        return distances, indices
 
-# Install langchain packages
-echo "Installing LangChain packages"
-python3 -m pip install langchain
-python3 -m pip install langchain_google_genai
-python3 -m pip install langchain_community
-
-# Verify installations
-echo "Checking installed packages:"
-python3 -m pip list
+def index_factory(d, description):
+    return IndexFlatL2(d)
+''')
+            print('Created faiss alternative')
+except Exception as e:
+    print('Error in setup:', e)
+    sys.exit(1)
+"
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
@@ -119,7 +168,8 @@ After=network.target
 User=$(whoami)
 Group=$(whoami)
 WorkingDirectory=/var/www/CHATBAOT
-Environment="PATH=/var/www/CHATBAOT/venv/bin"
+Environment="PATH=/var/www/CHATBAOT/venv/bin:/usr/bin"
+Environment="PYTHONPATH=/var/www/CHATBAOT:/usr/lib/python3/dist-packages"
 ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120
 Restart=always
 
