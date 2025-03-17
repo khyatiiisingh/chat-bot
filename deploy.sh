@@ -52,7 +52,7 @@ sudo apt-get install -y python3 python3-pip python3-dev
 # Ensure requirements.txt exists
 if [ ! -f requirements.txt ]; then
     echo "Creating requirements.txt..."
-    cat > requirements.txt <<EOF
+    cat > requirements.txt << 'REQUIREMENTS_EOF'
 streamlit==1.32.0
 fastapi==0.109.2
 uvicorn==0.27.1
@@ -63,7 +63,7 @@ langchain_community==0.0.13
 faiss-cpu==1.7.4
 python-dotenv==1.0.0
 gunicorn==21.2.0
-EOF
+REQUIREMENTS_EOF
 fi
 
 # Install application dependencies
