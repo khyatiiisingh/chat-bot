@@ -6,7 +6,7 @@ echo "=== Starting deployment process ==="
 # Create destination directory with proper permissions
 echo "Setting up app directory"
 sudo mkdir -p /var/www/CHATBAOT
-sudo chown $(whoami):$(whoami) /var/www/CHATBAOT
+sudo chown "$(whoami):$(whoami)" /var/www/CHATBAOT
 
 # Show files that will be deployed
 echo "Files to be deployed:"
@@ -23,7 +23,7 @@ sudo rm -rf /var/www/CHATBAOT/*
 
 echo "Moving files to app folder"
 sudo cp -r * /var/www/CHATBAOT/
-sudo chown -R $(whoami):$(whoami) /var/www/CHATBAOT
+sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBAOT
 
 # Restore logs if they existed
 if [ -f /tmp/gunicorn.log.backup ]; then
@@ -39,6 +39,25 @@ if [ -f env ]; then
 else
     echo "WARNING: env file not found, creating empty .env"
     touch .env
+fi
+
+# Verify transcript file exists
+if [ ! -f cleaned_transcript.txt ]; then
+    echo "WARNING: transcript file not found, creating sample file"
+    cat > cleaned_transcript.txt << 'EOF'
+Welcome to today's lecture on Artificial Intelligence and Machine Learning.
+This is a sample transcript file created during deployment.
+AI systems can analyze data, learn patterns, and make decisions.
+Machine learning is a subset of AI focused on building systems that learn from data.
+Deep learning uses neural networks with multiple layers.
+Natural language processing allows computers to understand human language.
+Computer vision enables machines to interpret and make decisions based on visual data.
+Reinforcement learning involves training agents to make sequences of decisions.
+Ethics in AI is important to ensure responsible development and deployment.
+Bias in AI systems can lead to unfair outcomes and must be addressed.
+The future of AI includes advancements in autonomous systems and general intelligence.
+EOF
+    echo "Sample transcript file created"
 fi
 
 # Install system dependencies and Python packages
@@ -61,9 +80,10 @@ streamlit==1.32.0
 fastapi==0.109.2
 uvicorn==0.27.1
 pydantic==2.5.2
-langchain==0.1.4
+# Use compatible versions for langchain and langchain_community
+langchain==0.1.0
+langchain_community==0.0.14
 langchain_google_genai==0.0.6
-langchain_community==0.0.13
 python-dotenv==1.0.0
 gunicorn==21.2.0
 EOF
@@ -71,6 +91,7 @@ EOF
 # Install minimal requirements
 echo "Installing Python packages in virtual environment"
 python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install uvicorn[standard]
 python3 -m pip install -r requirements-minimal.txt
 
 # Create a simple script to verify if we need faiss-cpu
@@ -170,7 +191,7 @@ Group=$(whoami)
 WorkingDirectory=/var/www/CHATBAOT
 Environment="PATH=/var/www/CHATBAOT/venv/bin:/usr/bin"
 Environment="PYTHONPATH=/var/www/CHATBAOT:/usr/lib/python3/dist-packages"
-ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120
+ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
 Restart=always
 
 [Install]

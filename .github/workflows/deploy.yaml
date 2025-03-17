@@ -32,6 +32,24 @@ jobs:
           GOOGLE_API_KEY=${{secrets.GOOGLE_API_KEY}}
           EOF
 
+      - name: Create sample transcript file if it doesn't exist
+        run: |
+          if [ ! -f cleaned_transcript.txt ]; then
+            cat > cleaned_transcript.txt << 'EOF'
+            Welcome to today's lecture on Artificial Intelligence and Machine Learning.
+            This is a sample transcript file created during deployment.
+            AI systems can analyze data, learn patterns, and make decisions.
+            Machine learning is a subset of AI focused on building systems that learn from data.
+            Deep learning uses neural networks with multiple layers.
+            Natural language processing allows computers to understand human language.
+            Computer vision enables machines to interpret and make decisions based on visual data.
+            Reinforcement learning involves training agents to make sequences of decisions.
+            Ethics in AI is important to ensure responsible development and deployment.
+            Bias in AI systems can lead to unfair outcomes and must be addressed.
+            The future of AI includes advancements in autonomous systems and general intelligence.
+            EOF
+          fi
+
       - name: Create deploy.sh script 🚀
         run: |
           cat > deploy.sh << 'DEPLOYEOF'
@@ -208,7 +226,7 @@ jobs:
           WorkingDirectory=/var/www/CHATBAOT
           Environment="PATH=/var/www/CHATBAOT/venv/bin:/usr/bin"
           Environment="PYTHONPATH=/var/www/CHATBAOT:/usr/lib/python3/dist-packages"
-          ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120
+          ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
           Restart=always
 
           [Install]
@@ -256,7 +274,7 @@ jobs:
       - name: Copy files to remote server 🚙
         run: |
           echo "Copying files to remote server"
-          scp -r app.py transcription.py requirements.txt env deploy.sh ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}}:~/
+          scp -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}}:~/
 
       - name: Run Bash Script To Deploy App 🚀
         run: |
