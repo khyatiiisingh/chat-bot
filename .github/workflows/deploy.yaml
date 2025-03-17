@@ -17,12 +17,16 @@ jobs:
         run: ls -la
 
       - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{secrets.EC2_SSH_KEY}}
+
+      - name: Configure SSH known hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{secrets.EC2_SSH_KEY}}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{secrets.EC2_HOST}} >> ~/.ssh/known_hosts
-          ssh -o StrictHostKeyChecking=no ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}} "echo SSH connection successful"
+          echo "Testing SSH connection"
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}} "echo SSH connection successful"
 
       - name: Create .env file dynamically 🧨
         run: |
@@ -232,8 +236,3 @@ jobs:
       - name: Run Bash Script To Deploy App 🚀
         run: |
           ssh -o StrictHostKeyChecking=no ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}} "chmod +x ./deploy.sh && ./deploy.sh"
-
-      - name: Clean up SSH key 🚀
-        if: always()
-        run: |
-          rm -f ~/.ssh/id_rsa

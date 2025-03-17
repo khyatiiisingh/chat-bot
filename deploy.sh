@@ -1,82 +1,3 @@
-name: Deploy CHATBAOT to EC2 🚀
-
-on:
-  push:
-    branches:
-      - "main" # Trigger on push to the main branch
-  workflow_dispatch: # Allow manual triggering
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout current branch ✅
-        uses: actions/checkout@v3
-
-      - name: Debug - List files in repository
-        run: ls -la
-
-      - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
-
-      - name: Create .env file dynamically 🧨
-        run: |
-          echo "ENV=${{ secrets.ENV }}" > env
-          echo "EC2_USERNAME=${{ secrets.EC2_USERNAME }}" >> env
-          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> env
-
-      - name: Create sample transcript files if they don't exist
-        run: |
-          if [ ! -f cleaned_transcript.txt ]; then
-            echo "Creating cleaned transcript file..."
-            echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
-            echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
-            echo "AI systems can analyze data, learn patterns, and make decisions." >> cleaned_transcript.txt
-            echo "Machine learning is a subset of AI focused on building systems that learn from data." >> cleaned_transcript.txt
-            echo "Deep learning uses neural networks with multiple layers." >> cleaned_transcript.txt
-            echo "Natural language processing allows computers to understand human language." >> cleaned_transcript.txt
-            echo "Computer vision enables machines to interpret and make decisions based on visual data." >> cleaned_transcript.txt
-            echo "Reinforcement learning involves training agents to make sequences of decisions." >> cleaned_transcript.txt
-            echo "Ethics in AI is important to ensure responsible development and deployment." >> cleaned_transcript.txt
-            echo "Bias in AI systems can lead to unfair outcomes and must be addressed." >> cleaned_transcript.txt
-            echo "The future of AI includes advancements in autonomous systems and general intelligence." >> cleaned_transcript.txt
-          fi
-
-          if [ ! -f combined_transcript.txt ]; then
-            echo "Creating combined transcript file..."
-            echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > combined_transcript.txt
-            echo "This is a sample combined transcript file created during deployment." >> combined_transcript.txt
-            echo "AI systems can analyze data, learn patterns, and make decisions." >> combined_transcript.txt
-            echo "Machine learning is a subset of AI focused on building systems that learn from data." >> combined_transcript.txt
-            echo "Deep learning uses neural networks with multiple layers." >> combined_transcript.txt
-            echo "Natural language processing allows computers to understand human language." >> combined_transcript.txt
-            echo "Computer vision enables machines to interpret and make decisions based on visual data." >> combined_transcript.txt
-            echo "Reinforcement learning involves training agents to make sequences of decisions." >> combined_transcript.txt
-          fi
-
-      - name: Create requirements.txt if not exists
-        run: |
-          if [ ! -f requirements.txt ]; then
-            echo "streamlit==1.32.0" > requirements.txt
-            echo "fastapi==0.109.2" >> requirements.txt
-            echo "uvicorn==0.27.1" >> requirements.txt
-            echo "pydantic==2.5.2" >> requirements.txt
-            echo "langchain==0.1.0" >> requirements.txt
-            echo "langchain_community==0.0.14" >> requirements.txt
-            echo "langchain_google_genai==0.0.6" >> requirements.txt
-            echo "python-dotenv==1.0.0" >> requirements.txt
-            echo "gunicorn==21.2.0" >> requirements.txt
-            echo "faiss-cpu==1.7.4" >> requirements.txt
-          fi
-
-      - name: Copy deploy.sh to repository
-        run: |
-          cat > deploy.sh << 'EOF'
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -161,14 +82,6 @@ python3 -m pip install uvicorn[standard]
 python3 -m pip install fastapi==0.109.2 streamlit==1.32.0 pydantic==2.5.2
 python3 -m pip install langchain==0.1.0 langchain_community==0.0.14 langchain_google_genai==0.0.6
 python3 -m pip install python-dotenv==1.0.0 gunicorn==21.2.0 scikit-learn
-python3 -m pip install faiss-cpu==1.7.4
-
-# Fix transcription.py to handle Gemini SystemMessages issue
-if grep -q "ChatGoogleGenerativeAI" transcription.py; then
-    echo "Updating transcription.py to fix Gemini SystemMessages issue"
-    sed -i 's/model='\''gemini-1.5-pro-latest'\'', api_key=api_key/model='\''gemini-1.5-pro-latest'\'', api_key=api_key, convert_system_message_to_human=True/g' transcription.py
-    echo "transcription.py updated"
-fi
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
@@ -232,19 +145,3 @@ sudo systemctl status chatbaot.service --no-pager
 
 echo "=== Deployment complete ==="
 echo "Check logs with: sudo journalctl -u chatbaot.service"
-EOF
-          chmod +x deploy.sh
-
-      - name: Copy files to remote server 🚙
-        run: |
-          echo "Copying files to remote server"
-          scp -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
-
-      - name: Run Bash Script To Deploy App 🚀
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
-
-      - name: Clean up SSH key 🚀
-        if: always()
-        run: |
-          rm -f ~/.ssh/id_rsa
