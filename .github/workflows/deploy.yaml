@@ -22,50 +22,6 @@ jobs:
           # Test SSH connection to make sure it works
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
 
-      - name: Create requirements.txt 📦
-        run: |
-          cat > requirements.txt << 'EOF'
-          streamlit==1.26.0
-          langchain==0.0.329
-          langchain_google_genai==0.0.5
-          langchain_community==0.0.10
-          faiss-cpu==1.7.4
-          python-dotenv==1.0.0
-          fastapi==0.103.1
-          uvicorn==0.23.2
-          gunicorn==21.2.0
-          flask==2.3.3
-          pydantic==2.3.0
-          EOF
-
-      - name: Create test app.py if not exists
-        run: |
-          if [ ! -f app.py ]; then
-            echo "Creating test app.py"
-            cat > app.py << 'EOF'
-          from fastapi import FastAPI
-
-          api = FastAPI()
-
-          @api.get("/")
-          def read_root():
-              return {"message": "API is running. This is a test deployment."}
-
-          @api.get("/health")
-          def health_check():
-              return {"status": "healthy"}
-          EOF
-          fi
-          
-          if [ ! -f transcription.py ]; then
-            echo "Creating test transcription.py"
-            cat > transcription.py << 'EOF'
-          def transcribe_audio(file_path):
-              """Placeholder function for audio transcription"""
-              return "This is a sample transcription text."
-          EOF
-          fi
-
       - name: Create .env file dynamically 🧨
         env:
           ENV: ${{ secrets.ENV }}
@@ -185,24 +141,6 @@ sudo systemctl restart nginx
 # Stop any existing Gunicorn processes
 echo "Stopping any existing Gunicorn processes"
 sudo pkill gunicorn || true
-
-# Create a minimal test app.py if needed
-if [ ! -f app.py ]; then
-    echo "WARNING: app.py not found, creating test version"
-    sudo tee app.py > /dev/null << APP_CONTENT
-from fastapi import FastAPI
-
-api = FastAPI()
-
-@api.get("/")
-def read_root():
-    return {"message": "API is running. This is a test deployment."}
-
-@api.get("/health")
-def health_check():
-    return {"status": "healthy"}
-APP_CONTENT
-fi
 
 echo "Directory contents:"
 ls -la

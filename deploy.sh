@@ -105,24 +105,6 @@ sudo systemctl restart nginx
 echo "Stopping any existing Gunicorn processes"
 sudo pkill gunicorn || true
 
-# Create a minimal test app.py if needed
-if [ ! -f app.py ]; then
-    echo "WARNING: app.py not found, creating test version"
-    sudo tee app.py > /dev/null << APP_CONTENT
-from fastapi import FastAPI
-
-api = FastAPI()
-
-@api.get("/")
-def read_root():
-    return {"message": "API is running. This is a test deployment."}
-
-@api.get("/health")
-def health_check():
-    return {"status": "healthy"}
-APP_CONTENT
-fi
-
 echo "Directory contents:"
 ls -la
 
