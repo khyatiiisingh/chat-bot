@@ -34,7 +34,7 @@ jobs:
 
       - name: Create deploy.sh script 🚀
         run: |
-          cat > deploy.sh << 'DEPLOY_EOF'
+          cat > deploy.sh << EOF
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -43,7 +43,7 @@ echo "=== Starting deployment process ==="
 # Create destination directory with proper permissions
 echo "Setting up app directory"
 sudo mkdir -p /var/www/CHATBAOT
-sudo chown $(whoami):$(whoami) /var/www/CHATBAOT
+sudo chown \$(whoami):\$(whoami) /var/www/CHATBAOT
 
 # Show files that will be deployed
 echo "Files to be deployed:"
@@ -60,7 +60,7 @@ sudo rm -rf /var/www/CHATBAOT/*
 
 echo "Moving files to app folder"
 sudo cp -r * /var/www/CHATBAOT/
-sudo chown -R $(whoami):$(whoami) /var/www/CHATBAOT
+sudo chown -R \$(whoami):\$(whoami) /var/www/CHATBAOT
 
 # Restore logs if they existed
 if [ -f /tmp/gunicorn.log.backup ]; then
@@ -118,10 +118,10 @@ server {
     
     location / {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 NGINX_CONFIG
@@ -160,7 +160,7 @@ curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding o
 
 echo "=== Deployment complete ==="
 echo "Check application logs at: /var/www/CHATBAOT/gunicorn.log"
-DEPLOY_EOF
+EOF
 
       - name: Create requirements.txt if not exists
         run: |
