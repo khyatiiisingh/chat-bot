@@ -6,7 +6,7 @@ echo "=== Starting deployment process ==="
 # Create destination directory with proper permissions
 echo "Setting up app directory"
 sudo mkdir -p /var/www/CHATBAOT
-sudo chown $(whoami):$(whoami) /var/www/CHATBAOT
+sudo chown "$(whoami):$(whoami)" /var/www/CHATBAOT
 
 # Show files that will be deployed
 echo "Files to be deployed:"
@@ -22,8 +22,8 @@ echo "Removing old app contents"
 sudo rm -rf /var/www/CHATBAOT/*
 
 echo "Moving files to app folder"
-sudo cp -r * /var/www/CHATBAOT/
-sudo chown -R $(whoami):$(whoami) /var/www/CHATBAOT
+sudo cp -r ./* /var/www/CHATBAOT/
+sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBAOT
 
 # Restore logs if they existed
 if [ -f /tmp/gunicorn.log.backup ]; then
