@@ -30,10 +30,10 @@ jobs:
           echo "EC2_USERNAME=${{secrets.EC2_USERNAME}}" >> env
           echo "GOOGLE_API_KEY=${{secrets.GOOGLE_API_KEY}}" >> env
 
-      - name: Create sample transcript file if it doesn't exist
+      - name: Create sample transcript files if they don't exist
         run: |
           if [ ! -f cleaned_transcript.txt ]; then
-            echo "Creating sample transcript file..."
+            echo "Creating cleaned transcript file..."
             echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
             echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
             echo "AI systems can analyze data, learn patterns, and make decisions." >> cleaned_transcript.txt
@@ -45,6 +45,18 @@ jobs:
             echo "Ethics in AI is important to ensure responsible development and deployment." >> cleaned_transcript.txt
             echo "Bias in AI systems can lead to unfair outcomes and must be addressed." >> cleaned_transcript.txt
             echo "The future of AI includes advancements in autonomous systems and general intelligence." >> cleaned_transcript.txt
+          fi
+
+          if [ ! -f combined_transcript.txt ]; then
+            echo "Creating combined transcript file..."
+            echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > combined_transcript.txt
+            echo "This is a sample combined transcript file created during deployment." >> combined_transcript.txt
+            echo "AI systems can analyze data, learn patterns, and make decisions." >> combined_transcript.txt
+            echo "Machine learning is a subset of AI focused on building systems that learn from data." >> combined_transcript.txt
+            echo "Deep learning uses neural networks with multiple layers." >> combined_transcript.txt
+            echo "Natural language processing allows computers to understand human language." >> combined_transcript.txt
+            echo "Computer vision enables machines to interpret and make decisions based on visual data." >> combined_transcript.txt
+            echo "Reinforcement learning involves training agents to make sequences of decisions." >> combined_transcript.txt
           fi
 
       - name: Create requirements.txt if not exists
@@ -106,9 +118,9 @@ jobs:
           echo '    touch .env' >> deploy.sh
           echo 'fi' >> deploy.sh
           echo '' >> deploy.sh
-          echo '# Verify transcript file exists' >> deploy.sh
+          echo '# Verify transcript files exist' >> deploy.sh
           echo 'if [ ! -f cleaned_transcript.txt ]; then' >> deploy.sh
-          echo '    echo "WARNING: transcript file not found, creating sample file"' >> deploy.sh
+          echo '    echo "WARNING: cleaned_transcript.txt not found, creating sample file"' >> deploy.sh
           echo '    echo "Welcome to today'\''s lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt' >> deploy.sh
           echo '    echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt' >> deploy.sh
           echo '    echo "AI systems can analyze data, learn patterns, and make decisions." >> cleaned_transcript.txt' >> deploy.sh
@@ -116,6 +128,14 @@ jobs:
           echo '    echo "Deep learning uses neural networks with multiple layers." >> cleaned_transcript.txt' >> deploy.sh
           echo '    echo "Natural language processing allows computers to understand human language." >> cleaned_transcript.txt' >> deploy.sh
           echo '    echo "Sample transcript file created"' >> deploy.sh
+          echo 'fi' >> deploy.sh
+          echo '' >> deploy.sh
+          echo 'if [ ! -f combined_transcript.txt ]; then' >> deploy.sh
+          echo '    echo "WARNING: combined_transcript.txt not found, creating sample file"' >> deploy.sh
+          echo '    echo "Welcome to today'\''s lecture on Artificial Intelligence and Machine Learning." > combined_transcript.txt' >> deploy.sh
+          echo '    echo "This is a sample combined transcript file created during deployment." >> combined_transcript.txt' >> deploy.sh
+          echo '    echo "AI systems can analyze data, learn patterns, and make decisions." >> combined_transcript.txt' >> deploy.sh
+          echo '    echo "Sample combined transcript file created"' >> deploy.sh
           echo 'fi' >> deploy.sh
           echo '' >> deploy.sh
           echo '# Install system dependencies and Python packages' >> deploy.sh
@@ -207,7 +227,7 @@ jobs:
       - name: Copy files to remote server 🚙
         run: |
           echo "Copying files to remote server"
-          scp -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}}:~/
+          scp -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{secrets.EC2_USERNAME}}@${{secrets.EC2_HOST}}:~/
 
       - name: Run Bash Script To Deploy App 🚀
         run: |

@@ -41,17 +41,24 @@ else
     touch .env
 fi
 
-# Verify transcript file exists
+# Verify transcript files exist
 if [ ! -f cleaned_transcript.txt ]; then
-    echo "WARNING: transcript file not found, creating sample file"
+    echo "WARNING: cleaned_transcript.txt not found, creating sample file"
     echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
     echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
     echo "AI systems can analyze data, learn patterns, and make decisions." >> cleaned_transcript.txt
     echo "Machine learning is a subset of AI focused on building systems that learn from data." >> cleaned_transcript.txt
     echo "Deep learning uses neural networks with multiple layers." >> cleaned_transcript.txt
     echo "Natural language processing allows computers to understand human language." >> cleaned_transcript.txt
-    echo "Computer vision enables machines to interpret and make decisions based on visual data." >> cleaned_transcript.txt
     echo "Sample transcript file created"
+fi
+
+if [ ! -f combined_transcript.txt ]; then
+    echo "WARNING: combined_transcript.txt not found, creating sample file"
+    echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > combined_transcript.txt
+    echo "This is a sample combined transcript file created during deployment." >> combined_transcript.txt
+    echo "AI systems can analyze data, learn patterns, and make decisions." >> combined_transcript.txt
+    echo "Sample combined transcript file created"
 fi
 
 # Install system dependencies and Python packages
@@ -78,7 +85,7 @@ python3 -m pip install python-dotenv==1.0.0 gunicorn==21.2.0 scikit-learn
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
-cat > /tmp/nginx_config << EOF
+sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << NGINX_EOF
 server {
     listen 80;
     server_name _;
@@ -91,9 +98,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-EOF
-sudo cp /tmp/nginx_config /etc/nginx/sites-available/chatbaot
-rm /tmp/nginx_config
+NGINX_EOF
 
 sudo ln -sf /etc/nginx/sites-available/chatbaot /etc/nginx/sites-enabled
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -102,7 +107,7 @@ sudo systemctl restart nginx
 
 # Create a systemd service file for the application
 echo "Creating systemd service for CHATBAOT"
-cat > /tmp/chatbaot.service << EOF
+sudo tee /etc/systemd/system/chatbaot.service > /dev/null << SERVICE_EOF
 [Unit]
 Description=CHATBAOT Gunicorn Service
 After=network.target
@@ -118,9 +123,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOF
-sudo cp /tmp/chatbaot.service /etc/systemd/system/
-rm /tmp/chatbaot.service
+SERVICE_EOF
 
 # Start the application
 echo "Starting the application as a service"
