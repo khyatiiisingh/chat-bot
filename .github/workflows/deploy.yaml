@@ -98,9 +98,10 @@ jobs:
           fastapi==0.109.2
           uvicorn==0.27.1
           pydantic==2.5.2
-          langchain==0.1.4
+          # Use compatible versions for langchain and langchain_community
+          langchain==0.1.0
+          langchain_community==0.0.14
           langchain_google_genai==0.0.6
-          langchain_community==0.0.13
           python-dotenv==1.0.0
           gunicorn==21.2.0
           EOF
@@ -245,9 +246,9 @@ jobs:
             echo "fastapi==0.109.2" >> requirements.txt
             echo "uvicorn==0.27.1" >> requirements.txt
             echo "pydantic==2.5.2" >> requirements.txt
-            echo "langchain==0.1.4" >> requirements.txt
+            echo "langchain==0.1.0" >> requirements.txt
+            echo "langchain_community==0.0.14" >> requirements.txt
             echo "langchain_google_genai==0.0.6" >> requirements.txt
-            echo "langchain_community==0.0.13" >> requirements.txt
             echo "python-dotenv==1.0.0" >> requirements.txt
             echo "gunicorn==21.2.0" >> requirements.txt
           fi
