@@ -120,7 +120,7 @@ sudo pkill gunicorn || true
 # Create a minimal test app.py if needed
 if [ ! -f app.py ]; then
     echo "WARNING: app.py not found, creating test version"
-    cat > app.py <<EOF
+    cat > app.py <<'APPEOF'
 from fastapi import FastAPI
 
 api = FastAPI()
@@ -132,7 +132,7 @@ def read_root():
 @api.get("/health")
 def health_check():
     return {"status": "healthy"}
-EOF
+APPEOF
 fi
 
 echo "Directory contents:"
@@ -160,4 +160,4 @@ fi
 echo "=== Deployment complete ==="
 echo "Application deployed to: /var/www/langchain-app/"
 echo "Log file location: /var/www/langchain-app/gunicorn.log"
-echo "Access your application at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+echo "Access your application at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'your-ec2-ip')"
