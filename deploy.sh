@@ -51,8 +51,8 @@ sudo apt-get install -y python3 python3-pip python3-dev
 
 # Ensure requirements.txt exists
 if [ ! -f requirements.txt ]; then
-    echo "requirements.txt not found, creating it..."
-    cat <<EOF > requirements.txt
+    echo "Creating requirements.txt..."
+    cat > requirements.txt <<EOF
 streamlit==1.32.0
 fastapi==0.109.2
 uvicorn==0.27.1
