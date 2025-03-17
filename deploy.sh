@@ -41,19 +41,28 @@ else
     touch .env
 fi
 
-# Install dependencies
+# Install system dependencies
+echo "Installing system dependencies"
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-dev nginx
+sudo apt-get install -y python3 python3-pip python3-dev python3-venv nginx
 
+# Create and activate virtual environment
+echo "Setting up Python virtual environment"
+sudo apt-get install -y python3-full
+python3 -m venv venv
+source venv/bin/activate
+
+# Install Python dependencies in virtual environment
+echo "Installing Python dependencies in virtual environment"
 if [ -f requirements.txt ]; then
-    sudo pip3 install -r requirements.txt
+    pip install -r requirements.txt
 else
     echo "WARNING: requirements.txt not found, installing essential packages"
-    sudo pip3 install streamlit fastapi uvicorn pydantic langchain langchain_google_genai langchain_community faiss-cpu python-dotenv gunicorn
+    pip install streamlit fastapi uvicorn pydantic langchain langchain_google_genai langchain_community faiss-cpu python-dotenv gunicorn
 fi
 
 # Configure and restart Nginx
-# Using a temporary file approach instead of here-document
+echo "Configuring Nginx"
 cat > /tmp/nginx_config << EOF
 server {
     listen 80;
@@ -76,19 +85,44 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 
-# Start the application
-sudo pkill gunicorn || true
-echo "Starting Gunicorn"
-cd /var/www/CHATBAOT/
-nohup sudo gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120 > gunicorn.log 2>&1 &
+# Create a systemd service file for the application
+echo "Creating systemd service for CHATBAOT"
+cat > /tmp/chatbaot.service << EOF
+[Unit]
+Description=CHATBAOT Gunicorn Service
+After=network.target
 
-# Wait for Gunicorn to start
-echo "Waiting for Gunicorn to start..."
+[Service]
+User=$(whoami)
+Group=$(whoami)
+WorkingDirectory=/var/www/CHATBAOT
+Environment="PATH=/var/www/CHATBAOT/venv/bin"
+ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo cp /tmp/chatbaot.service /etc/systemd/system/
+rm /tmp/chatbaot.service
+
+# Start the application
+echo "Starting the application as a service"
+sudo systemctl daemon-reload
+sudo systemctl stop chatbaot.service || true
+sudo systemctl enable chatbaot.service
+sudo systemctl start chatbaot.service
+
+# Wait for the service to start
+echo "Waiting for the service to start..."
 sleep 10
 
 # Verify the app is running
 echo "Verifying application is running"
 curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding on port 8000"
 
+# Check service status
+sudo systemctl status chatbaot.service --no-pager
+
 echo "=== Deployment complete ==="
-echo "Check logs at: /var/www/CHATBAOT/gunicorn.log"
+echo "Check logs with: sudo journalctl -u chatbaot.service"
