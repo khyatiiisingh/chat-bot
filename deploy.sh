@@ -35,7 +35,7 @@ cd /var/www/CHATBAOT/
 
 # Ensure the .env file exists
 if [ -f env ]; then
-    sudo mv env .env
+    mv env .env
     echo ".env file created from env"
 else
     echo "WARNING: env file not found, creating empty .env"
@@ -49,13 +49,9 @@ sudo apt-get update
 echo "Installing Python and pip"
 sudo apt-get install -y python3 python3-pip python3-dev
 
-# Install application dependencies from requirements.txt
-echo "Checking for requirements.txt"
-if [ -f requirements.txt ]; then
-    echo "Installing application dependencies from requirements.txt"
-    sudo pip3 install -r requirements.txt
-else
-    echo "WARNING: requirements.txt not found, creating a default one"
+# Ensure requirements.txt exists
+if [ ! -f requirements.txt ]; then
+    echo "requirements.txt not found, creating it..."
     cat <<EOF > requirements.txt
 streamlit==1.32.0
 fastapi==0.109.2
@@ -68,28 +64,27 @@ faiss-cpu==1.7.4
 python-dotenv==1.0.0
 gunicorn==21.2.0
 EOF
-    sudo pip3 install -r requirements.txt
 fi
+
+# Install application dependencies
+echo "Installing application dependencies from requirements.txt"
+sudo pip3 install -r requirements.txt
 
 # Create sample transcript if not exists
 if [ ! -f cleaned_transcript.txt ]; then
     echo "Creating sample transcript file"
-    cat <<EOF > cleaned_transcript.txt
-Welcome to today's lecture on Artificial Intelligence and Machine Learning.
-This is a sample transcript file created during deployment.
-EOF
+    echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > cleaned_transcript.txt
+    echo "This is a sample transcript file created during deployment." >> cleaned_transcript.txt
 fi
 
-# Update and install Nginx if not already installed
+# Install and configure Nginx
 if ! command -v nginx > /dev/null; then
     echo "Installing Nginx"
-    sudo apt-get update
     sudo apt-get install -y nginx
 fi
 
-# Configure Nginx
 echo "Configuring Nginx for HTTP proxy"
-sudo tee /etc/nginx/sites-available/chatbaot > /dev/null <<'NGINX_CONFIG'
+sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << 'NGINX_CONFIG'
 server {
     listen 80;
     server_name _;
@@ -123,12 +118,12 @@ sudo pkill gunicorn || true
 echo "Directory contents:"
 ls -la
 
-# Start Gunicorn with HTTP binding
-echo "Starting Gunicorn with HTTP binding"
+# Start Gunicorn
+echo "Starting Gunicorn"
 cd /var/www/CHATBAOT/
 nohup sudo gunicorn --workers 3 --bind 0.0.0.0:8000 app:api --timeout 120 > gunicorn.log 2>&1 &
 
-# Give Gunicorn time to start
+# Wait for Gunicorn to start
 echo "Waiting for Gunicorn to start..."
 sleep 10
 
