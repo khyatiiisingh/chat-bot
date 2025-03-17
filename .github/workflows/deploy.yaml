@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current branch ✅
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         
       - name: Debug - List files in repository
         run: ls -la
@@ -26,7 +26,7 @@ jobs:
         env:
           ENV: ${{ secrets.ENV }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          GOOGLE_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           echo "ENV=${ENV:-production}" >> env
           echo "EC2_USERNAME=${EC2_USERNAME}" >> env
@@ -111,17 +111,17 @@ fi
 
 # Configure Nginx
 echo "Configuring Nginx for HTTP proxy"
-sudo tee /etc/nginx/sites-available/myapp > /dev/null << NGINX_CONFIG
+sudo tee /etc/nginx/sites-available/myapp > /dev/null << 'NGINX_CONFIG'
 server {
     listen 80;
     server_name _;
     
     location / {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 NGINX_CONFIG
