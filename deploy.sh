@@ -46,13 +46,18 @@ echo "Installing system dependencies"
 sudo apt-get update
 sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-full nginx
 
-# Install Pillow dependencies
-echo "Installing Pillow dependencies"
-sudo apt-get install -y libpng-dev libjpeg-dev libtiff-dev libfreetype6-dev
-
-# Install FAISS dependencies
-echo "Installing FAISS dependencies"
-sudo apt-get install -y build-essential libssl-dev swig python3-dev libblas-dev liblapack-dev gfortran cmake
+# Install additional system dependencies needed for Pillow and FAISS
+echo "Installing additional dependencies for Python packages"
+sudo apt-get install -y \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    libopenblas-dev \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
+    python3-pillow
 
 # Create and activate virtual environment
 echo "Setting up Python virtual environment"
@@ -63,14 +68,28 @@ source venv/bin/activate
 echo "Upgrading pip and setuptools"
 pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies in virtual environment
-echo "Installing Python dependencies in virtual environment"
-if [ -f requirements.txt ]; then
-    pip install --no-cache-dir -r requirements.txt
-else
-    echo "WARNING: requirements.txt not found, installing essential packages"
-    pip install --no-cache-dir streamlit fastapi uvicorn pydantic langchain langchain_google_genai langchain_community faiss-cpu python-dotenv gunicorn
-fi
+# Install specific packages first using system packages if possible
+echo "Installing specific packages first"
+pip install --no-cache-dir streamlit fastapi uvicorn pydantic gunicorn python-dotenv
+
+# Try to install problematic packages with alternatives
+echo "Trying to install potentially problematic packages"
+pip install --no-cache-dir --only-binary=:all: faiss-cpu || {
+    echo "Installing FAISS from source (this may take a while)"
+    CFLAGS="-mavx2" pip install --no-cache-dir faiss-cpu
+}
+
+# Try using system pillow or install a specific version
+pip install --no-cache-dir pillow==9.5.0 || {
+    echo "Installing Pillow alternative"
+    pip install --no-cache-dir pillow --global-option="build_ext" --global-option="--disable-jpeg"
+}
+
+# Now install langchain packages
+echo "Installing LangChain packages"
+pip install --no-cache-dir langchain==0.1.4
+pip install --no-cache-dir langchain_google_genai==0.0.6
+pip install --no-cache-dir langchain_community==0.0.13
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
