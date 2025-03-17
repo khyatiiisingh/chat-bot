@@ -2,18 +2,6 @@
 set -e  # Exit immediately if a command exits with a non-zero status
 
 echo "=== Starting deployment process ==="
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-echo "Deployment started at: $(date)"
-
-# Create backup directory if needed
-BACKUP_DIR="/home/ubuntu/app_backups"
-mkdir -p $BACKUP_DIR
-
-# Backup existing app if it exists
-if [ -d "/var/www/langchain-app" ]; then
-    echo "Backing up existing application"
-    sudo tar -czf "$BACKUP_DIR/app_backup_$TIMESTAMP.tar.gz" -C /var/www langchain-app 2>/dev/null || echo "No existing app to backup"
-fi
 
 # Create destination directory with proper permissions
 echo "Setting up app directory"
@@ -84,9 +72,9 @@ if ! command -v nginx > /dev/null; then
     sudo apt-get install -y nginx
 fi
 
-# Configure Nginx to use HTTP instead of Unix socket
+# Configure Nginx
 echo "Configuring Nginx for HTTP proxy"
-sudo bash -c 'cat > /etc/nginx/sites-available/myapp <<EOF
+sudo tee /etc/nginx/sites-available/myapp > /dev/null << NGINX_CONFIG
 server {
     listen 80;
     server_name _;
@@ -99,7 +87,7 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-EOF'
+NGINX_CONFIG
 
 # Enable the site
 sudo ln -sf /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled
@@ -120,7 +108,7 @@ sudo pkill gunicorn || true
 # Create a minimal test app.py if needed
 if [ ! -f app.py ]; then
     echo "WARNING: app.py not found, creating test version"
-    cat > app.py <<'APPEOF'
+    sudo tee app.py > /dev/null << APP_CONTENT
 from fastapi import FastAPI
 
 api = FastAPI()
@@ -132,7 +120,7 @@ def read_root():
 @api.get("/health")
 def health_check():
     return {"status": "healthy"}
-APPEOF
+APP_CONTENT
 fi
 
 echo "Directory contents:"
@@ -149,15 +137,7 @@ sleep 10
 
 # Verify the app is running
 echo "Verifying application is running"
-if curl -s http://127.0.0.1:8000/; then
-    echo "✅ Application is running successfully!"
-else
-    echo "⚠️ WARNING: Application is not responding on port 8000"
-    echo "Checking logs for errors:"
-    tail -n 50 gunicorn.log
-fi
+curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding on port 8000"
 
 echo "=== Deployment complete ==="
-echo "Application deployed to: /var/www/langchain-app/"
-echo "Log file location: /var/www/langchain-app/gunicorn.log"
-echo "Access your application at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo 'your-ec2-ip')"
+echo "Check application logs at: /var/www/langchain-app/gunicorn.log"
