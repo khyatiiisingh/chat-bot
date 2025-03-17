@@ -40,18 +40,17 @@ sudo apt-get install -y python3 python3-pip python3-dev
 # Ensure requirements.txt exists
 if [ ! -f requirements.txt ]; then
     echo "Creating requirements.txt..."
-    cat << 'REQUIREMENTS_EOF' > requirements.txt
-streamlit==1.32.0
-fastapi==0.109.2
-uvicorn==0.27.1
-pydantic==2.5.2
-langchain==0.1.4
-langchain_google_genai==0.0.6
-langchain_community==0.0.13
-faiss-cpu==1.7.4
-python-dotenv==1.0.0
-gunicorn==21.2.0
-REQUIREMENTS_EOF
+    # Create requirements.txt using echo commands instead of here-document
+    echo "streamlit==1.32.0" > requirements.txt
+    echo "fastapi==0.109.2" >> requirements.txt
+    echo "uvicorn==0.27.1" >> requirements.txt
+    echo "pydantic==2.5.2" >> requirements.txt
+    echo "langchain==0.1.4" >> requirements.txt
+    echo "langchain_google_genai==0.0.6" >> requirements.txt
+    echo "langchain_community==0.0.13" >> requirements.txt
+    echo "faiss-cpu==1.7.4" >> requirements.txt
+    echo "python-dotenv==1.0.0" >> requirements.txt
+    echo "gunicorn==21.2.0" >> requirements.txt
 fi
 # Install application dependencies
 echo "Installing application dependencies from requirements.txt"
@@ -68,19 +67,22 @@ if ! command -v nginx > /dev/null; then
     sudo apt-get install -y nginx
 fi
 echo "Configuring Nginx for HTTP proxy"
-sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << 'NGINX_CONFIG'
+# Create nginx config file without here-document
+cat > /tmp/nginx_config << EOF
 server {
     listen 80;
     server_name _;
     location / {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-NGINX_CONFIG
+EOF
+sudo cp /tmp/nginx_config /etc/nginx/sites-available/chatbaot
+rm /tmp/nginx_config
 # Enable the site
 sudo ln -sf /etc/nginx/sites-available/chatbaot /etc/nginx/sites-enabled
 sudo rm -f /etc/nginx/sites-enabled/default
