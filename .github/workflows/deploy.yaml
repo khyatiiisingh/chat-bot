@@ -1,4 +1,4 @@
-name: Deploy CHATBOT to EC2 🚀
+name: Deploy CHATBOT to EC2
 on:
   push:
     branches: [main]
@@ -7,330 +7,46 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - name: Debug Environment
+      - name: Set up environment
         run: |
-          echo "Running as user: $(whoami)"
-          echo "Home directory: $HOME"
-          echo "Working directory: $(pwd)"
+          # Create env file from secrets
+          touch env
+          if [ -n "${{ secrets.ENV }}" ]; then echo "ENV=${{ secrets.ENV }}" >> env; fi
+          if [ -n "${{ secrets.EC2_USERNAME }}" ]; then echo "EC2_USERNAME=${{ secrets.EC2_USERNAME }}" >> env; fi
+          if [ -n "${{ secrets.GOOGLE_API_KEY_4 }}" ]; then echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY_4 }}" >> env; fi
+          if [ -n "${{ secrets.GOOGLE_API_KEY_1 }}" ]; then echo "GOOGLE_API_KEY_1=${{ secrets.GOOGLE_API_KEY_1 }}" >> env; fi
+          if [ -n "${{ secrets.GOOGLE_API_KEY_2 }}" ]; then echo "GOOGLE_API_KEY_2=${{ secrets.GOOGLE_API_KEY_2 }}" >> env; fi
+          if [ -n "${{ secrets.GOOGLE_API_KEY_3 }}" ]; then echo "GOOGLE_API_KEY_3=${{ secrets.GOOGLE_API_KEY_3 }}" >> env; fi
 
-      # Check if secrets are set
-      - name: Check required secrets
-        run: |
-          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
-            echo "Error: EC2_SSH_KEY secret is not set"
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.EC2_HOST }}" ]; then
-            echo "Error: EC2_HOST secret is not set"
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.EC2_USERNAME }}" ]; then
-            echo "Error: EC2_USERNAME secret is not set"
-            exit 1
-          fi
-
-          echo "All required secrets are set"
-
-      # Set up SSH connection manually (easier to debug)
-      - name: Setup SSH connection
-        run: |
+          # Set up SSH
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-          # Disable strict host key checking
           echo "Host *" > ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-          # Print SSH config for debugging
-          echo "SSH config:"
-          cat ~/.ssh/config
+      - name: Package code
+        run: tar -czf deploy.tar.gz --exclude='.git' --exclude='.github' .
 
-      - name: Create environment file
+      - name: Deploy to EC2
         run: |
-          echo "ENV=${{ secrets.ENV }}" > env
-          echo "EC2_USERNAME=${{ secrets.EC2_USERNAME }}" >> env
-          echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> env
-
-          # Add multiple API keys if available
-          if [ ! -z "${{ secrets.GOOGLE_API_KEY_1 }}" ]; then
-            echo "GOOGLE_API_KEY_1=${{ secrets.GOOGLE_API_KEY_1 }}" >> env
-          fi
-          if [ ! -z "${{ secrets.GOOGLE_API_KEY_2 }}" ]; then
-            echo "GOOGLE_API_KEY_2=${{ secrets.GOOGLE_API_KEY_2 }}" >> env
-          fi
-          if [ ! -z "${{ secrets.GOOGLE_API_KEY_3 }}" ]; then
-            echo "GOOGLE_API_KEY_3=${{ secrets.GOOGLE_API_KEY_3 }}" >> env
-          fi
-
-      - name: Create sample transcript file
-        run: |
-          echo "Welcome to today's lecture on AI and ML." > transcript.txt
-          echo "This is a sample transcript file." >> transcript.txt
-          echo "AI systems can analyze data, learn patterns, and make decisions." >> transcript.txt
-          echo "Machine learning is a subset of AI focused on building systems that learn from data." >> transcript.txt
-          echo "Deep learning uses neural networks with multiple layers." >> transcript.txt
-          echo "Natural language processing allows computers to understand human language." >> transcript.txt
-
-          # Create cleaned transcript for FastAPI app
-          cp transcript.txt cleaned_transcript.txt
-
-      - name: Create app files and dependencies
-        run: |
-          # Create requirements.txt
-          cat > requirements.txt << 'EOF'
-          # Flask API dependencies
-          flask==2.3.3
-          google-generativeai==0.3.1
-          sentence-transformers==2.2.2
-          faiss-cpu>=1.7.4
-          nltk==3.8.1
-          python-dotenv==1.0.0
-          gunicorn==21.2.0
-
-          # FastAPI dependencies
-          fastapi==0.109.2
-          streamlit==1.32.0
-          uvicorn[standard]==0.27.1
-          pydantic==2.5.2
-          langchain==0.1.0
-          langchain_community==0.0.14
-          langchain_google_genai==0.0.6
-          scikit-learn>=1.3.0
-          EOF
-
-          # Create deployment script
-          cat > deploy.sh << 'EOF'
-          #!/bin/bash
-          set -e  # Exit immediately if a command exits with a non-zero status
-
-          echo "=== Starting deployment process ==="
-
-          # Create destination directory with proper permissions
-          echo "Setting up app directory"
-          sudo mkdir -p /var/www/CHATBOT
-          sudo chown "$(whoami):$(whoami)" /var/www/CHATBOT
-
-          # Show files that will be deployed
-          echo "Files to be deployed:"
-          ls -la
-
-          # Remove old app contents while preserving logs
-          if [ -f /var/www/CHATBOT/gunicorn.log ]; then
-              echo "Preserving existing logs"
-              sudo cp /var/www/CHATBOT/gunicorn.log /tmp/gunicorn.log.backup
-          fi
-
-          echo "Removing old app contents"
-          sudo rm -rf /var/www/CHATBOT/*
-
-          echo "Moving files to app folder"
-          sudo cp -r * /var/www/CHATBOT/
-          sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBOT
-
-          # Restore logs if they existed
-          if [ -f /tmp/gunicorn.log.backup ]; then
-              sudo mv /tmp/gunicorn.log.backup /var/www/CHATBOT/gunicorn.log
-          fi
-
-          cd /var/www/CHATBOT/
-
-          # Ensure .env file exists
-          if [ -f env ]; then
-              sudo mv env .env
-              echo ".env file created from env"
+          # Check connectivity
+          if timeout 10 bash -c "</dev/tcp/${{ secrets.EC2_HOST }}/22"; then
+            # Copy files to EC2
+            scp -o ConnectTimeout=10 deploy.tar.gz ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
+            
+            # Execute deployment script
+            ssh -o ConnectTimeout=30 ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deployment && tar -xzf deploy.tar.gz -C ~/deployment && cd ~/deployment && chmod +x ./scripts/deploy.sh && ./scripts/deploy.sh && cd ~ && rm -rf deploy.tar.gz deployment"
+            
+            echo "Deployment completed successfully"
           else
-              echo "WARNING: env file not found, creating empty .env"
-              touch .env
+            echo "Could not connect to EC2 instance at ${{ secrets.EC2_HOST }}"
+            echo "Deployment skipped due to connectivity issues"
+            exit 1
           fi
-
-          # Verify transcript files exist
-          if [ ! -f transcript.txt ]; then
-              echo "WARNING: transcript.txt not found, creating sample file"
-              echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > transcript.txt
-              echo "This is a sample transcript file created during deployment." >> transcript.txt
-              echo "AI systems can analyze data, learn patterns, and make decisions." >> transcript.txt
-              echo "Machine learning is a subset of AI focused on building systems that learn from data." >> transcript.txt
-              echo "Deep learning uses neural networks with multiple layers." >> transcript.txt
-              echo "Natural language processing allows computers to understand human language." >> transcript.txt
-              echo "Sample transcript file created"
-          fi
-
-          # Create cleaned_transcript.txt for FastAPI app if needed
-          if [ ! -f cleaned_transcript.txt ]; then
-              echo "Creating cleaned_transcript.txt from transcript.txt"
-              cp transcript.txt cleaned_transcript.txt
-          fi
-
-          # Install system dependencies and Python packages
-          echo "Installing system dependencies and Python packages"
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip python3-dev python3-venv python3-pillow python3-numpy python3-scipy nginx
-
-          # Create and activate Python virtual environment
-          echo "Creating Python virtual environment"
-          python3 -m venv venv
-          . ./venv/bin/activate
-
-          # Verify we're in the virtual environment
-          echo "Python interpreter being used:"
-          which python3
-
-          # Install Python packages in virtual environment
-          echo "Installing Python packages in virtual environment"
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install -r requirements.txt
-
-          # Configure Nginx with two backends - Flask API and FastAPI
-          echo "Configuring Nginx"
-          sudo tee /etc/nginx/sites-available/chatbot > /dev/null << NGINX_EOF
-          server {
-              listen 80;
-              server_name _;
-              
-              # FastAPI endpoint (app.py)
-              location / {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              
-              # Flask API endpoint (api.py)
-              location /flask/ {
-                  proxy_pass http://127.0.0.1:4000/;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-          }
-          NGINX_EOF
-
-          sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled
-          sudo rm -f /etc/nginx/sites-enabled/default
-          sudo nginx -t
-          sudo systemctl restart nginx
-
-          # Create systemd service files for both applications
-          echo "Creating systemd service for FastAPI (app.py)"
-          sudo tee /etc/systemd/system/chatbot-fastapi.service > /dev/null << SERVICE_EOF
-          [Unit]
-          Description=CHATBOT FastAPI Service
-          After=network.target
-
-          [Service]
-          User=$(whoami)
-          Group=$(whoami)
-          WorkingDirectory=/var/www/CHATBOT
-          Environment="PATH=/var/www/CHATBOT/venv/bin:/usr/bin"
-          Environment="PYTHONPATH=/var/www/CHATBOT:/usr/lib/python3/dist-packages"
-          ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
-          Restart=always
-
-          [Install]
-          WantedBy=multi-user.target
-          SERVICE_EOF
-
-          echo "Creating systemd service for Flask API (api.py)"
-          sudo tee /etc/systemd/system/chatbot-flask.service > /dev/null << SERVICE_EOF
-          [Unit]
-          Description=CHATBOT Flask API Service
-          After=network.target
-
-          [Service]
-          User=$(whoami)
-          Group=$(whoami)
-          WorkingDirectory=/var/www/CHATBOT
-          Environment="PATH=/var/www/CHATBOT/venv/bin:/usr/bin"
-          Environment="PYTHONPATH=/var/www/CHATBOT:/usr/lib/python3/dist-packages"
-          ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:4000 api:app --timeout 120
-          Restart=always
-
-          [Install]
-          WantedBy=multi-user.target
-          SERVICE_EOF
-
-          # Start the applications
-          echo "Starting the applications as services"
-          sudo systemctl daemon-reload
-
-          # Start FastAPI service
-          sudo systemctl stop chatbot-fastapi.service || true
-          sudo systemctl enable chatbot-fastapi.service
-          sudo systemctl start chatbot-fastapi.service
-
-          # Start Flask API service
-          sudo systemctl stop chatbot-flask.service || true
-          sudo systemctl enable chatbot-flask.service
-          sudo systemctl start chatbot-flask.service
-
-          # Wait for the services to start
-          echo "Waiting for services to start..."
-          sleep 10
-
-          # Verify the apps are running
-          echo "Verifying FastAPI application is running"
-          curl -s http://127.0.0.1:8000/ || echo "WARNING: FastAPI application is not responding on port 8000"
-
-          echo "Verifying Flask API application is running"
-          curl -s http://127.0.0.1:4000/ || echo "WARNING: Flask API application is not responding on port 4000"
-
-          # Check service status
-          echo "FastAPI service status:"
-          sudo systemctl status chatbot-fastapi.service --no-pager
-
-          echo "Flask API service status:"
-          sudo systemctl status chatbot-flask.service --no-pager
-
-          echo "=== Deployment complete ==="
-          echo "Check FastAPI logs with: sudo journalctl -u chatbot-fastapi.service"
-          echo "Check Flask API logs with: sudo journalctl -u chatbot-flask.service"
-          EOF
-
-          chmod +x deploy.sh
-
-      # Deploy only if we're not in a PR
-      - name: Verify EC2 connectivity (with timeout)
-        if: github.event_name != 'pull_request'
-        timeout-minutes: 1
-        continue-on-error: true
-        id: connectivity_test
-        run: |
-          echo "Testing EC2 connectivity (with 10s timeout)..."
-          timeout 10 bash -c "</dev/tcp/${{ secrets.EC2_HOST }}/22" && echo "CONNECTION_OK=true" >> $GITHUB_OUTPUT || echo "CONNECTION_OK=false" >> $GITHUB_OUTPUT
-          echo "EC2 connection test completed"
-
-      - name: Deploy if connectivity is good
-        if: steps.connectivity_test.outputs.CONNECTION_OK == 'true'
-        run: |
-          echo "SSH connection successful, proceeding with deployment..."
-
-          # Copy files to EC2
-          echo "Starting file copy to EC2..."
-          scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no -r app.py api.py requirements.txt env deploy.sh transcript.txt cleaned_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
-          echo "File copy completed"
-
-          # Run deployment
-          echo "Running deployment script on EC2..."
-          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
-          echo "Deployment script execution completed"
-
-      - name: Deployment skipped due to connectivity issues
-        if: steps.connectivity_test.outputs.CONNECTION_OK != 'true'
-        run: |
-          echo "Warning: Could not connect to EC2 instance at ${{ secrets.EC2_HOST }}"
-          echo "Deployment skipped due to connectivity issues. Please check:"
-          echo "1. EC2 instance is running"
-          echo "2. Security groups allow SSH (port 22) access from GitHub Actions runners"
-          echo "3. EC2_HOST secret has the correct IP address or hostname"
-          echo "4. EC2_SSH_KEY secret is correctly formatted"
-          echo "5. EC2_USERNAME secret is correct"
-          echo "Files have been prepared but deployment was skipped."

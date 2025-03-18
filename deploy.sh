@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status
+set -e
 
 echo "=== Starting deployment process ==="
 
@@ -12,10 +12,15 @@ sudo chown "$(whoami):$(whoami)" /var/www/CHATBOT
 echo "Files to be deployed:"
 ls -la
 
-# Remove old app contents while preserving logs
+# Remove old app contents while preserving logs and env
 if [ -f /var/www/CHATBOT/gunicorn.log ]; then
     echo "Preserving existing logs"
     sudo cp /var/www/CHATBOT/gunicorn.log /tmp/gunicorn.log.backup
+fi
+
+if [ -f /var/www/CHATBOT/.env ]; then
+    echo "Preserving existing .env file"
+    sudo cp /var/www/CHATBOT/.env /tmp/.env.backup
 fi
 
 echo "Removing old app contents"
@@ -30,30 +35,31 @@ if [ -f /tmp/gunicorn.log.backup ]; then
     sudo mv /tmp/gunicorn.log.backup /var/www/CHATBOT/gunicorn.log
 fi
 
+# Merge environment files if both exist
 cd /var/www/CHATBOT/
-
-# Ensure .env file exists
-if [ -f env ]; then
-    sudo mv env .env
-    echo ".env file created from env"
+if [ -f env ] && [ -f /tmp/.env.backup ]; then
+    echo "Merging new env with existing .env file"
+    cat env /tmp/.env.backup | sort | uniq > .env
+    rm env
+elif [ -f env ]; then
+    echo "Using new env file as .env"
+    mv env .env
+elif [ -f /tmp/.env.backup ]; then
+    echo "Restoring existing .env file"
+    mv /tmp/.env.backup .env
 else
-    echo "WARNING: env file not found, creating empty .env"
+    echo "WARNING: No env file found, creating empty .env"
     touch .env
 fi
 
-# Verify transcript files exist
+# Create sample transcript files if needed
 if [ ! -f transcript.txt ]; then
     echo "WARNING: transcript.txt not found, creating sample file"
     echo "Welcome to today's lecture on Artificial Intelligence and Machine Learning." > transcript.txt
     echo "This is a sample transcript file created during deployment." >> transcript.txt
-    echo "AI systems can analyze data, learn patterns, and make decisions." >> transcript.txt
-    echo "Machine learning is a subset of AI focused on building systems that learn from data." >> transcript.txt
-    echo "Deep learning uses neural networks with multiple layers." >> transcript.txt
-    echo "Natural language processing allows computers to understand human language." >> transcript.txt
     echo "Sample transcript file created"
 fi
 
-# Create cleaned_transcript.txt for FastAPI app if needed
 if [ ! -f cleaned_transcript.txt ]; then
     echo "Creating cleaned_transcript.txt from transcript.txt"
     cp transcript.txt cleaned_transcript.txt
@@ -76,7 +82,15 @@ which python3
 # Install Python packages in virtual environment
 echo "Installing Python packages in virtual environment"
 python3 -m pip install --upgrade pip setuptools wheel
-python3 -m pip install -r requirements.txt
+
+# Install requirements if file exists
+if [ -f requirements.txt ]; then
+    echo "Installing requirements from requirements.txt"
+    python3 -m pip install -r requirements.txt
+else
+    echo "WARNING: requirements.txt not found, installing default packages"
+    python3 -m pip install flask fastapi uvicorn gunicorn python-dotenv
+fi
 
 # Configure Nginx with two backends - Flask API and FastAPI
 echo "Configuring Nginx"
@@ -153,15 +167,26 @@ SERVICE_EOF
 echo "Starting the applications as services"
 sudo systemctl daemon-reload
 
+# Check if the main app files exist and show a warning if they don't
+if [ ! -f app.py ]; then
+    echo "WARNING: app.py not found! FastAPI service might not start properly."
+fi
+
+if [ ! -f api.py ]; then
+    echo "WARNING: api.py not found! Flask API service might not start properly."
+fi
+
 # Start FastAPI service
+echo "Starting FastAPI service..."
 sudo systemctl stop chatbot-fastapi.service || true
 sudo systemctl enable chatbot-fastapi.service
-sudo systemctl start chatbot-fastapi.service
+sudo systemctl start chatbot-fastapi.service || echo "WARNING: Failed to start FastAPI service"
 
 # Start Flask API service
+echo "Starting Flask API service..."
 sudo systemctl stop chatbot-flask.service || true
 sudo systemctl enable chatbot-flask.service
-sudo systemctl start chatbot-flask.service
+sudo systemctl start chatbot-flask.service || echo "WARNING: Failed to start Flask API service"
 
 # Wait for the services to start
 echo "Waiting for services to start..."
