@@ -1,8 +1,9 @@
-name: Deploy CHATBOT to EC2
+name: Deploy CHATBOT
+
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   deploy:
@@ -10,60 +11,32 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Create deployment package
+        run: |
+          mkdir -p /tmp/deployment
+          rsync -a --exclude='.git' --exclude='.github' . /tmp/deployment/
+          tar --warning=no-file-changed -czf deploy.tar.gz -C /tmp/deployment .
+          rm -rf /tmp/deployment
+
+      - name: Copy deployment package to server
+        uses: appleboy/scp-action@v0.1.4
         with:
-          fetch-depth: 0
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy.tar.gz"
+          target: "/var/www/CHATBOT/"
 
-      - name: Create env file
-        env:
-          ENV: ${{ secrets.ENV }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY_4 }}
-          GOOGLE_API_KEY_1: ${{ secrets.GOOGLE_API_KEY_1 }}
-          GOOGLE_API_KEY_2: ${{ secrets.GOOGLE_API_KEY_2 }}
-          GOOGLE_API_KEY_3: ${{ secrets.GOOGLE_API_KEY_3 }}
-        run: |
-          echo "ENV=${ENV}" > env
-          echo "EC2_USERNAME=${EC2_USERNAME}" >> env
-          echo "GOOGLE_API_KEY=${GOOGLE_API_KEY}" >> env
-          echo "GOOGLE_API_KEY_1=${GOOGLE_API_KEY_1}" >> env
-          echo "GOOGLE_API_KEY_2=${GOOGLE_API_KEY_2}" >> env
-          echo "GOOGLE_API_KEY_3=${GOOGLE_API_KEY_3}" >> env
-
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo "Host *" > ~/.ssh/config
-          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
-          chmod 600 ~/.ssh/config
-
-      - name: Package code
-        run: tar -czf deploy.tar.gz --exclude='.git' --exclude='.github' .
-
-      - name: Deploy to EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-        run: |
-          echo "Checking EC2 connection..."
-          if timeout 5 bash -c "</dev/tcp/$EC2_HOST/22"; then
-            echo "Connection successful. Deploying..."
-            scp deploy.tar.gz $EC2_USERNAME@$EC2_HOST:~/
-            ssh $EC2_USERNAME@$EC2_HOST << 'EOF'
-              mkdir -p ~/deployment
-              tar -xzf ~/deploy.tar.gz -C ~/deployment
-              cd ~/deployment
-              chmod +x ./scripts/deploy.sh
-              ./scripts/deploy.sh
-              cd ~
-              rm -rf deploy.tar.gz deployment
-            EOF
-            echo "Deployment completed successfully"
-          else
-            echo "Could not connect to EC2 instance"
-            exit 1
-          fi
+      - name: SSH into server and deploy
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/CHATBOT
+            tar -xzf deploy.tar.gz
+            rm -f deploy.tar.gz
+            chmod +x deploy.sh
+            ./deploy.sh

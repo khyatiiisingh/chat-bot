@@ -48,7 +48,7 @@ if [ -f /tmp/gunicorn.log.backup ]; then
     sudo mv /tmp/gunicorn.log.backup /var/www/CHATBOT/gunicorn.log
 fi
 
-# Restore or merge .env file
+# Restore .env file
 cd /var/www/CHATBOT || exit 1
 if [ -f /tmp/.env.backup ]; then
     log_info "Merging new env with existing .env file"
@@ -92,7 +92,8 @@ else
     pip install flask fastapi uvicorn gunicorn python-dotenv
 fi
 
-# Save Nginx config to temp file and then move it
+# Create and configure Nginx
+log_info "Configuring Nginx"
 cat > /tmp/nginx_conf << EOF
 server {
     listen 80;
@@ -116,69 +117,14 @@ server {
 }
 EOF
 
-log_info "Configuring Nginx"
 sudo mv /tmp/nginx_conf /etc/nginx/sites-available/chatbot
 sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl restart nginx
 
-# Create systemd service for FastAPI
-log_info "Creating FastAPI service"
-cat > /tmp/fastapi_service << EOF
-[Unit]
-Description=CHATBOT FastAPI Service
-After=network.target
-
-[Service]
-User=$(whoami)
-Group=$(whoami)
-WorkingDirectory=/var/www/CHATBOT
-Environment="PATH=/var/www/CHATBOT/venv/bin:/usr/bin"
-ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo mv /tmp/fastapi_service /etc/systemd/system/chatbot-fastapi.service
-
-# Create systemd service for Flask
-log_info "Creating Flask service"
-cat > /tmp/flask_service << EOF
-[Unit]
-Description=CHATBOT Flask API Service
-After=network.target
-
-[Service]
-User=$(whoami)
-Group=$(whoami)
-WorkingDirectory=/var/www/CHATBOT
-Environment="PATH=/var/www/CHATBOT/venv/bin:/usr/bin"
-ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:4000 api:app --timeout 120
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo mv /tmp/flask_service /etc/systemd/system/chatbot-flask.service
-
-# Start and enable services
+# Restart services
 log_info "Starting services"
 sudo systemctl daemon-reload
-sudo systemctl enable chatbot-fastapi.service chatbot-flask.service
 sudo systemctl restart chatbot-fastapi.service chatbot-flask.service
-
-# Verify services are running
-check_service_status() {
-    if systemctl is-active --quiet "$1"; then
-        log_info "$1 is running"
-    else
-        log_error "$1 failed to start"
-        exit 1
-    fi
-}
-
-check_service_status chatbot-fastapi.service
-check_service_status chatbot-flask.service
 
 log_info "=== Deployment complete ==="
