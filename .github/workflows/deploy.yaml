@@ -1,4 +1,4 @@
-name: Deploy CHATBAOT to EC2 🚀
+name: Deploy CHATBOT to EC2 🚀
 on:
   push:
     branches: [main]
@@ -9,340 +9,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-      
-      - name: Create files
+
+      - name: Create environment file
         run: |
           echo "ENV=${{ secrets.ENV }}" > env
           echo "EC2_USERNAME=${{ secrets.EC2_USERNAME }}" >> env
           echo "GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}" >> env
-          
+
+      - name: Create sample transcripts
+        run: |
           echo "Welcome to today's lecture on AI and ML." > cleaned_transcript.txt
           echo "This is a sample transcript file." >> cleaned_transcript.txt
-          
           echo "Welcome to today's lecture on AI and ML." > combined_transcript.txt
           echo "This is a sample combined transcript." >> combined_transcript.txt
-      
-      - name: Create app.py
+
+      - name: Create Python files
         run: |
-          cat > app.py << 'EOF'
-import streamlit as st
-import os
-from dotenv import load_dotenv
-from transcription import initialize_conversation_chain, process_question
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import sys
-
-# Load environment variables
-load_dotenv()
-
-# Retrieve Google API Key from environment variable
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
-# Main Streamlit app
-def main():
-    st.set_page_config(page_title="Lecture Chatbot", page_icon=":books:")
-    
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    
-    st.header("Lecture Chatbot :books:")
-    
-    # Check if API key is available
-    if not GOOGLE_API_KEY:
-        st.error("Google API Key is missing! Set it as an environment variable.")
-        st.stop()
-    
-    # Initialize conversation (only once)
-    if st.session_state.conversation is None:
-        with st.spinner("Loading transcript..."):
-            try:
-                st.session_state.conversation = initialize_conversation_chain(GOOGLE_API_KEY)
-                if st.session_state.conversation:
-                    st.success("Transcript loaded successfully!")
-                else:
-                    st.error("Transcript file 'cleaned_transcript.txt' not found!")
-                    st.stop()
-            except Exception as e:
-                st.error(f"Error initializing conversation: {str(e)}")
-                st.stop()
-    
-    # User input for questions
-    user_question = st.text_input("Ask a question about the lecture:")
-    if user_question and st.session_state.conversation:
-        # Process the question
-        with st.spinner("Processing your question..."):
-            try:
-                response = process_question(st.session_state.conversation, user_question)
-                
-                # Update chat history
-                st.session_state.chat_history = response['chat_history']
-                
-                # Display the response
-                st.write(f"**Question:** {user_question}")
-                st.write(f"**Answer:** {response['answer']}")
-                
-                # Display chat history (optional)
-                if st.checkbox("Show chat history"):
-                    for i, message in enumerate(st.session_state.chat_history):
-                        if i % 2 == 0:
-                            st.write(f"**User:** {message.content}")
-                        else:
-                            st.write(f"**Bot:** {message.content}")
-                        st.write("---")
-            except Exception as e:
-                st.error(f"Error processing question: {str(e)}")
-
-# Create FastAPI app
-api = FastAPI(title="Lecture Chatbot API")
-
-# Define request model
-class QuestionRequest(BaseModel):
-    question: str
-
-# Global conversation chain
-conversation_chain = None
-
-@api.on_event("startup")
-async def startup_event():
-    global conversation_chain
-    # Load environment variables
-    load_dotenv()
-    # Get API key
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Google API Key is missing")
-    # Initialize conversation chain
-    conversation_chain = initialize_conversation_chain(api_key)
-    if not conversation_chain:
-        raise HTTPException(status_code=500, detail="Failed to initialize conversation chain")
-
-@api.post("/api/ask")
-async def ask(request: QuestionRequest):
-    global conversation_chain
-    if not conversation_chain:
-        raise HTTPException(status_code=500, detail="Conversation chain not initialized")
-    
-    try:
-        response = process_question(conversation_chain, request.question)
-        return {"answer": response["answer"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
-
-# Root endpoint
-@api.get("/")
-def read_root():
-    return {"message": "API is running. Use /api/ask endpoint to ask questions."}
-
-if __name__ == '__main__':
-    # Check if running as a script or imported as a module
-    if len(sys.argv) > 1 and sys.argv[1] == "api":
-        # Run FastAPI with uvicorn
-        uvicorn.run("app:api", host="0.0.0.0", port=8000, reload=True)
-    else:
-        # Run Streamlit app
-        main()
-EOF
-
-      - name: Create transcription.py
-        run: |
-          cat > transcription.py << 'EOF'
-import os
-from dotenv import load_dotenv
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain_community.vectorstores import FAISS
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-
-# Path to the cleaned transcript file
-TRANSCRIPT_FILE = "cleaned_transcript.txt"
-
-def load_transcript():
-    """Load the cleaned transcript file."""
-    if not os.path.exists(TRANSCRIPT_FILE):
-        return ""
-    
-    with open(TRANSCRIPT_FILE, "r", encoding="utf-8") as f:
-        return f.read().strip()
-
-def get_text_chunks(text):
-    """Split text into smaller chunks for better retrieval."""
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
-    return text_splitter.split_text(text)
-
-def get_vectorstore(text_chunks, api_key):
-    """Create FAISS vector database from text chunks."""
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
-        api_key=api_key
-    )
-    return FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-
-def get_conversation_chain(vectorstore, api_key):
-    """Set up the conversational AI chain with memory."""
-    llm = ChatGoogleGenerativeAI(
-        model='gemini-1.5-pro-latest',
-        api_key=api_key,
-        convert_system_message_to_human=True
-    )
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    
-    return ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(),
-        memory=memory
-    )
-
-def process_question(conversation_chain, question):
-    """Process user queries and generate responses."""
-    response = conversation_chain({"question": question})
-    return response
-
-def initialize_conversation_chain(api_key):
-    """Initialize the conversation chain with the transcript."""
-    raw_text = load_transcript()
-    if not raw_text:
-        return None
-    
-    text_chunks = get_text_chunks(raw_text)
-    vectorstore = get_vectorstore(text_chunks, api_key)
-    return get_conversation_chain(vectorstore, api_key)
-EOF
-
-      - name: Create deploy.sh
-        run: |
-          cat > deploy.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "=== Starting deployment process ==="
-
-# Create destination directory
-sudo mkdir -p /var/www/CHATBAOT
-sudo chown "$(whoami):$(whoami)" /var/www/CHATBAOT
-
-# Preserve logs if they exist
-if [ -f /var/www/CHATBAOT/gunicorn.log ]; then
-    sudo cp /var/www/CHATBAOT/gunicorn.log /tmp/gunicorn.log.backup
-fi
-
-# Clean and copy files
-sudo rm -rf /var/www/CHATBAOT/*
-sudo cp -r * /var/www/CHATBAOT/
-sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBAOT
-
-# Restore logs if they existed
-if [ -f /tmp/gunicorn.log.backup ]; then
-    sudo mv /tmp/gunicorn.log.backup /var/www/CHATBAOT/gunicorn.log
-fi
-
-cd /var/www/CHATBAOT/
-
-# Setup environment
-if [ -f env ]; then
-    sudo mv env .env
-fi
-
-# Install dependencies
-sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-venv nginx
-
-# Setup Python environment
-python3 -m venv venv
-. ./venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
-
-# Configure Nginx
-sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << 'NGINX_EOF'
-server {
-    listen 80;
-    server_name _;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-NGINX_EOF
-
-sudo ln -sf /etc/nginx/sites-available/chatbaot /etc/nginx/sites-enabled
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
-
-# Create service
-sudo tee /etc/systemd/system/chatbaot.service > /dev/null << 'SERVICE_EOF'
-[Unit]
-Description=CHATBAOT Gunicorn Service
-After=network.target
-
-[Service]
-User=$(whoami)
-Group=$(whoami)
-WorkingDirectory=/var/www/CHATBAOT
-Environment="PATH=/var/www/CHATBAOT/venv/bin:/usr/bin"
-ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-SERVICE_EOF
-
-# Start service
-sudo systemctl daemon-reload
-sudo systemctl enable chatbaot.service
-sudo systemctl start chatbaot.service
-sleep 5
-sudo systemctl status chatbaot.service --no-pager
-
-echo "=== Deployment complete ==="
-EOF
+          # Scripts are created from source files in the repo
+          cp python/app.py app.py
+          cp python/transcription.py transcription.py
+          cp scripts/deploy.sh deploy.sh
           chmod +x deploy.sh
-
-      - name: Create requirements.txt
-        run: |
-          cat > requirements.txt << 'EOF'
-streamlit==1.32.0
-fastapi==0.109.2
-uvicorn==0.27.1
-pydantic==2.5.2
-langchain==0.1.0
-langchain_community==0.0.14
-langchain_google_genai==0.0.6
-faiss-cpu>=1.7.4
-python-dotenv==1.0.0
-gunicorn==21.2.0
-scikit-learn>=1.3.0
-EOF
+          cp config/requirements.txt requirements.txt
 
       - name: Copy files to EC2
         run: |
           scp -o StrictHostKeyChecking=no -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
-      
+
       - name: Run deployment
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
-      
+
       - name: Cleanup
         if: always()
         run: |
