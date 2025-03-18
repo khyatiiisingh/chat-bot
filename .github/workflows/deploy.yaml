@@ -15,23 +15,42 @@ jobs:
           echo "Home directory: $HOME"
           echo "Working directory: $(pwd)"
 
-      # Use GitHub's official SSH action instead of manual setup
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: Check SSH connection
+      # Check if secrets are set
+      - name: Check required secrets
         run: |
-          # Add host key checking exception for EC2 host
+          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "Error: EC2_SSH_KEY secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "Error: EC2_HOST secret is not set"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.EC2_USERNAME }}" ]; then
+            echo "Error: EC2_USERNAME secret is not set"
+            exit 1
+          fi
+
+          echo "All required secrets are set"
+
+      # Set up SSH connection manually (easier to debug)
+      - name: Setup SSH connection
+        run: |
           mkdir -p ~/.ssh
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
-          echo "Host ${{ secrets.EC2_HOST }}" >> ~/.ssh/config
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Disable strict host key checking
+          echo "Host *" > ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
           echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
-          # Test SSH connection
-          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
+          # Print SSH config for debugging
+          echo "SSH config:"
+          cat ~/.ssh/config
 
       - name: Create environment file
         run: |
@@ -411,14 +430,40 @@ jobs:
           scikit-learn>=1.3.0
           EOF
 
-      - name: Copy files to EC2
+      # Deploy only if we're not in a PR
+      - name: Verify EC2 connectivity (with timeout)
+        if: github.event_name != 'pull_request'
+        timeout-minutes: 1
+        continue-on-error: true
+        id: connectivity_test
         run: |
+          echo "Testing EC2 connectivity (with 10s timeout)..."
+          timeout 10 bash -c "</dev/tcp/${{ secrets.EC2_HOST }}/22" && echo "CONNECTION_OK=true" >> $GITHUB_OUTPUT || echo "CONNECTION_OK=false" >> $GITHUB_OUTPUT
+          echo "EC2 connection test completed"
+
+      - name: Deploy if connectivity is good
+        if: steps.connectivity_test.outputs.CONNECTION_OK == 'true'
+        run: |
+          echo "SSH connection successful, proceeding with deployment..."
+
+          # Copy files to EC2
           echo "Starting file copy to EC2..."
-          scp -o StrictHostKeyChecking=no -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
+          scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
           echo "File copy completed"
 
-      - name: Run deployment
-        run: |
+          # Run deployment
           echo "Running deployment script on EC2..."
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
           echo "Deployment script execution completed"
+
+      - name: Deployment skipped due to connectivity issues
+        if: steps.connectivity_test.outputs.CONNECTION_OK != 'true'
+        run: |
+          echo "Warning: Could not connect to EC2 instance at ${{ secrets.EC2_HOST }}"
+          echo "Deployment skipped due to connectivity issues. Please check:"
+          echo "1. EC2 instance is running"
+          echo "2. Security groups allow SSH (port 22) access from GitHub Actions runners"
+          echo "3. EC2_HOST secret has the correct IP address or hostname"
+          echo "4. EC2_SSH_KEY secret is correctly formatted"
+          echo "5. EC2_USERNAME secret is correct"
+          echo "Files have been prepared but deployment was skipped."

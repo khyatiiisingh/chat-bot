@@ -5,32 +5,32 @@ echo "=== Starting deployment process ==="
 
 # Create destination directory with proper permissions
 echo "Setting up app directory"
-sudo mkdir -p /var/www/CHATBAOT
-sudo chown "$(whoami):$(whoami)" /var/www/CHATBAOT
+sudo mkdir -p /var/www/CHATBOT
+sudo chown "$(whoami):$(whoami)" /var/www/CHATBOT
 
 # Show files that will be deployed
 echo "Files to be deployed:"
 ls -la
 
 # Remove old app contents while preserving logs
-if [ -f /var/www/CHATBAOT/gunicorn.log ]; then
+if [ -f /var/www/CHATBOT/gunicorn.log ]; then
     echo "Preserving existing logs"
-    sudo cp /var/www/CHATBAOT/gunicorn.log /tmp/gunicorn.log.backup
+    sudo cp /var/www/CHATBOT/gunicorn.log /tmp/gunicorn.log.backup
 fi
 
 echo "Removing old app contents"
-sudo rm -rf /var/www/CHATBAOT/*
+sudo rm -rf /var/www/CHATBOT/*
 
 echo "Moving files to app folder"
-sudo cp -r * /var/www/CHATBAOT/
-sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBAOT
+sudo cp -r * /var/www/CHATBOT/
+sudo chown -R "$(whoami):$(whoami)" /var/www/CHATBOT
 
 # Restore logs if they existed
 if [ -f /tmp/gunicorn.log.backup ]; then
-    sudo mv /tmp/gunicorn.log.backup /var/www/CHATBAOT/gunicorn.log
+    sudo mv /tmp/gunicorn.log.backup /var/www/CHATBOT/gunicorn.log
 fi
 
-cd /var/www/CHATBAOT/
+cd /var/www/CHATBOT/
 
 # Ensure .env file exists
 if [ -f env ]; then
@@ -85,7 +85,7 @@ python3 -m pip install python-dotenv==1.0.0 gunicorn==21.2.0 scikit-learn
 
 # Configure and restart Nginx
 echo "Configuring Nginx"
-sudo tee /etc/nginx/sites-available/chatbaot > /dev/null << NGINX_EOF
+sudo tee /etc/nginx/sites-available/chatbot > /dev/null << NGINX_EOF
 server {
     listen 80;
     server_name _;
@@ -100,25 +100,25 @@ server {
 }
 NGINX_EOF
 
-sudo ln -sf /etc/nginx/sites-available/chatbaot /etc/nginx/sites-enabled
+sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 
 # Create a systemd service file for the application
-echo "Creating systemd service for CHATBAOT"
-sudo tee /etc/systemd/system/chatbaot.service > /dev/null << SERVICE_EOF
+echo "Creating systemd service for CHATBOT"
+sudo tee /etc/systemd/system/chatbot.service > /dev/null << SERVICE_EOF
 [Unit]
-Description=CHATBAOT Gunicorn Service
+Description=CHATBOT Gunicorn Service
 After=network.target
 
 [Service]
 User=$(whoami)
 Group=$(whoami)
-WorkingDirectory=/var/www/CHATBAOT
-Environment="PATH=/var/www/CHATBAOT/venv/bin:/usr/bin"
-Environment="PYTHONPATH=/var/www/CHATBAOT:/usr/lib/python3/dist-packages"
-ExecStart=/var/www/CHATBAOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
+WorkingDirectory=/var/www/CHATBOT
+Environment="PATH=/var/www/CHATBOT/venv/bin:/usr/bin"
+Environment="PYTHONPATH=/var/www/CHATBOT:/usr/lib/python3/dist-packages"
+ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
 Restart=always
 
 [Install]
@@ -128,9 +128,9 @@ SERVICE_EOF
 # Start the application
 echo "Starting the application as a service"
 sudo systemctl daemon-reload
-sudo systemctl stop chatbaot.service || true
-sudo systemctl enable chatbaot.service
-sudo systemctl start chatbaot.service
+sudo systemctl stop chatbot.service || true
+sudo systemctl enable chatbot.service
+sudo systemctl start chatbot.service
 
 # Wait for the service to start
 echo "Waiting for the service to start..."
@@ -141,7 +141,7 @@ echo "Verifying application is running"
 curl -s http://127.0.0.1:8000/ || echo "WARNING: Application is not responding on port 8000"
 
 # Check service status
-sudo systemctl status chatbaot.service --no-pager
+sudo systemctl status chatbot.service --no-pager
 
 echo "=== Deployment complete ==="
-echo "Check logs with: sudo journalctl -u chatbaot.service"
+echo "Check logs with: sudo journalctl -u chatbot.service"
