@@ -22,7 +22,7 @@ jobs:
           GOOGLE_API_KEY_2: ${{ secrets.GOOGLE_API_KEY_2 }}
           GOOGLE_API_KEY_3: ${{ secrets.GOOGLE_API_KEY_3 }}
         run: |
-          cat <<EOF > env
+          cat > env << EOF
           ENV=${ENV}
           EC2_USERNAME=${EC2_USERNAME}
           GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -38,17 +38,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat <<EOF > ~/.ssh/config
+          cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
           EOF
           chmod 600 ~/.ssh/config
 
-      - name: Copy deployment script file
+      - name: Create deployment script
         run: |
           mkdir -p scripts
-          cat > scripts/deploy.sh <<'DEPLOY_SCRIPT'
+          cat > scripts/deploy.sh << 'EOF'
 #!/bin/bash
 set -e  # Exit on any error
 
@@ -145,7 +145,7 @@ fi
 
 # Create nginx config file
 log_info "Creating Nginx configuration"
-sudo tee /etc/nginx/sites-available/chatbot > /dev/null <<'NGINX_CONFIG'
+sudo tee /etc/nginx/sites-available/chatbot > /dev/null << 'EONGINX'
 server {
     listen 80;
     server_name _;
@@ -166,7 +166,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-NGINX_CONFIG
+EONGINX
 
 # Configure Nginx
 log_info "Configuring Nginx"
@@ -176,7 +176,7 @@ sudo nginx -t && sudo systemctl restart nginx
 
 # Create systemd service for FastAPI
 log_info "Creating FastAPI service"
-sudo tee /etc/systemd/system/chatbot-fastapi.service > /dev/null <<'FASTAPI_SERVICE'
+sudo tee /etc/systemd/system/chatbot-fastapi.service > /dev/null << 'EOFASTAPI'
 [Unit]
 Description=CHATBOT FastAPI Service
 After=network.target
@@ -191,11 +191,11 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-FASTAPI_SERVICE
+EOFASTAPI
 
 # Create systemd service for Flask
 log_info "Creating Flask service"
-sudo tee /etc/systemd/system/chatbot-flask.service > /dev/null <<'FLASK_SERVICE'
+sudo tee /etc/systemd/system/chatbot-flask.service > /dev/null << 'EOFLASK'
 [Unit]
 Description=CHATBOT Flask API Service
 After=network.target
@@ -210,7 +210,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-FLASK_SERVICE
+EOFLASK
 
 # Start and enable services
 log_info "Starting services"
@@ -232,7 +232,7 @@ check_service_status chatbot-fastapi.service
 check_service_status chatbot-flask.service
 
 log_info "=== Deployment complete ==="
-DEPLOY_SCRIPT
+EOF
           chmod +x scripts/deploy.sh
 
       - name: Package code
