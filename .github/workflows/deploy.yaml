@@ -1,4 +1,4 @@
-name: Deploy CHATBOT
+name: Deploy to EC2
 
 on:
   push:
@@ -8,35 +8,22 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Create deployment package
+      - name: Set up SSH and Deploy
         run: |
-          mkdir -p /tmp/deployment
-          rsync -a --exclude='.git' --exclude='.github' . /tmp/deployment/
-          tar --warning=no-file-changed -czf deploy.tar.gz -C /tmp/deployment .
-          rm -rf /tmp/deployment
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy deployment package to server
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "deploy.tar.gz"
-          target: "/var/www/CHATBOT/"
-
-      - name: SSH into server and deploy
-        uses: appleboy/ssh-action@v0.1.4
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /var/www/CHATBOT
-            tar -xzf deploy.tar.gz
-            rm -f deploy.tar.gz
-            chmod +x deploy.sh
-            ./deploy.sh
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd /var/www/chatbot  # Change this to your project directory
+            git pull origin main
+            source venv/bin/activate  # Activate virtual environment
+            pip install -r requirements.txt  # Install dependencies
+            sudo systemctl restart chatbot  # Restart the service
+          EOF
