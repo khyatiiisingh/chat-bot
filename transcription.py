@@ -38,22 +38,35 @@ def get_vectorstore(text_chunks, api_key):
 def get_conversation_chain(vectorstore, api_key):
     """Set up the conversational AI chain with memory."""
     llm = ChatGoogleGenerativeAI(
-        model='gemini-1.5-pro-latest',
+        model='gemini-1.5-pro',  # Changed from gemini-1.5-pro-latest to gemini-1.5-pro
         api_key=api_key,
-        convert_system_message_to_human=True
+        convert_system_message_to_human=True,
+        temperature=0.7
     )
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     
-    return ConversationalRetrievalChain.from_llm(
+    memory = ConversationBufferMemory(
+        memory_key="chat_history", 
+        return_messages=True,
+        output_key="answer"
+    )
+    
+    chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
-        memory=memory
+        memory=memory,
+        return_source_documents=False
     )
+    
+    return chain
 
 def process_question(conversation_chain, question):
     """Process user queries and generate responses."""
-    response = conversation_chain({"question": question})
-    return response
+    try:
+        response = conversation_chain({"question": question})
+        return response
+    except Exception as e:
+        print(f"Error in process_question: {str(e)}")
+        raise Exception(f"Failed to process question: {str(e)}")
 
 def initialize_conversation_chain(api_key):
     """Initialize the conversation chain with the transcript."""

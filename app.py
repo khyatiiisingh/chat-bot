@@ -3,9 +3,11 @@ import os
 from dotenv import load_dotenv
 from transcription import initialize_conversation_chain, process_question
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import sys
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -79,19 +81,39 @@ class QuestionRequest(BaseModel):
 # Global conversation chain
 conversation_chain = None
 
+# Error handler
+@api.exception_handler(Exception)
+async def universal_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+    )
+
 @api.on_event("startup")
 async def startup_event():
     global conversation_chain
-    # Load environment variables
-    load_dotenv()
-    # Get API key
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Google API Key is missing")
-    # Initialize conversation chain
-    conversation_chain = initialize_conversation_chain(api_key)
-    if not conversation_chain:
-        raise HTTPException(status_code=500, detail="Failed to initialize conversation chain")
+    try:
+        # Load environment variables
+        load_dotenv()
+        # Get API key
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            print("Error: Google API Key is missing")
+            raise Exception("Google API Key is missing")
+            
+        # Initialize conversation chain
+        print("Initializing conversation chain...")
+        conversation_chain = initialize_conversation_chain(api_key)
+        
+        if not conversation_chain:
+            print("Error: Failed to initialize conversation chain")
+            raise Exception("Failed to initialize conversation chain")
+            
+        print("Conversation chain initialized successfully")
+    except Exception as e:
+        print(f"Startup error: {str(e)}")
+        print(traceback.format_exc())
+        raise Exception(f"Startup error: {str(e)}")
 
 @api.post("/api/ask")
 async def ask(request: QuestionRequest):
@@ -100,10 +122,14 @@ async def ask(request: QuestionRequest):
         raise HTTPException(status_code=500, detail="Conversation chain not initialized")
     
     try:
+        print(f"Processing question: {request.question}")
         response = process_question(conversation_chain, request.question)
+        print(f"Got response: {response['answer']}")
         return {"answer": response["answer"]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
+        print(f"Error processing question: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 # Root endpoint
 @api.get("/")
