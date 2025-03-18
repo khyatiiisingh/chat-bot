@@ -13,7 +13,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Create environment file from secrets
       - name: Create env file
         env:
           ENV: ${{ secrets.ENV }}
@@ -23,15 +22,15 @@ jobs:
           GOOGLE_API_KEY_2: ${{ secrets.GOOGLE_API_KEY_2 }}
           GOOGLE_API_KEY_3: ${{ secrets.GOOGLE_API_KEY_3 }}
         run: |
-          touch env
-          if [ -n "$ENV" ]; then echo "ENV=$ENV" >> env; fi
-          if [ -n "$EC2_USERNAME" ]; then echo "EC2_USERNAME=$EC2_USERNAME" >> env; fi
-          if [ -n "$GOOGLE_API_KEY" ]; then echo "GOOGLE_API_KEY=$GOOGLE_API_KEY" >> env; fi
-          if [ -n "$GOOGLE_API_KEY_1" ]; then echo "GOOGLE_API_KEY_1=$GOOGLE_API_KEY_1" >> env; fi
-          if [ -n "$GOOGLE_API_KEY_2" ]; then echo "GOOGLE_API_KEY_2=$GOOGLE_API_KEY_2" >> env; fi
-          if [ -n "$GOOGLE_API_KEY_3" ]; then echo "GOOGLE_API_KEY_3=$GOOGLE_API_KEY_3" >> env; fi
+          cat <<EOF > env
+          ENV=${ENV}
+          EC2_USERNAME=${EC2_USERNAME}
+          GOOGLE_API_KEY=${GOOGLE_API_KEY}
+          GOOGLE_API_KEY_1=${GOOGLE_API_KEY_1}
+          GOOGLE_API_KEY_2=${GOOGLE_API_KEY_2}
+          GOOGLE_API_KEY_3=${GOOGLE_API_KEY_3}
+          EOF
 
-      # Set up SSH configuration
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -39,154 +38,129 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          echo "Host *" > ~/.ssh/config
-          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "  UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          cat <<EOF > ~/.ssh/config
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
           chmod 600 ~/.ssh/config
 
-      # Create deployment script
       - name: Create deployment script
         run: |
           mkdir -p scripts
-          
-          # Creating main deployment script
           cat > scripts/deploy.sh << 'EOF'
-#!/bin/bash
-set -e
+          #!/bin/bash
+          set -e
 
-echo "=== Starting deployment process ==="
+          echo "=== Starting deployment process ==="
+          currentuser=$(whoami)
 
-# Get current user
-currentuser=$(whoami)
+          sudo mkdir -p /var/www/CHATBOT
+          sudo chown "${currentuser}:${currentuser}" /var/www/CHATBOT
 
-# Create destination directory with proper permissions
-echo "Setting up app directory"
-sudo mkdir -p /var/www/CHATBOT
-sudo chown "${currentuser}:${currentuser}" /var/www/CHATBOT
+          echo "Files to be deployed:"
+          ls -la
+          sudo cp -r * /var/www/CHATBOT/
+          sudo chown -R "${currentuser}:${currentuser}" /var/www/CHATBOT
 
-# Show files and move them to app folder
-echo "Files to be deployed:"
-ls -la
-sudo cp -r * /var/www/CHATBOT/
-sudo chown -R "${currentuser}:${currentuser}" /var/www/CHATBOT
+          cd /var/www/CHATBOT/
+          python3 -m venv venv
+          . ./venv/bin/activate
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install flask fastapi uvicorn gunicorn python-dotenv
 
-# Create virtual environment and install dependencies 
-cd /var/www/CHATBOT/
-python3 -m venv venv
-. ./venv/bin/activate
-python3 -m pip install --upgrade pip setuptools wheel
-python3 -m pip install flask fastapi uvicorn gunicorn python-dotenv
+          if [ -f requirements.txt ]; then
+              python3 -m pip install -r requirements.txt
+          fi
 
-# Install from requirements if present
-if [ -f requirements.txt ]; then
-    python3 -m pip install -r requirements.txt
-fi
+          sudo bash -c 'cat > /etc/nginx/sites-available/chatbot << "EOF_NGINX"
+          server {
+              listen 80;
+              server_name _;
+              location / {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+              location /flask/ {
+                  proxy_pass http://127.0.0.1:4000/;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+          EOF_NGINX'
 
-# Create nginx config
-sudo bash -c 'cat > /etc/nginx/sites-available/chatbot << "EOF_NGINX"
-server {
-    listen 80;
-    server_name _;
-    
-    # FastAPI endpoint (app.py)
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Flask API endpoint (api.py)
-    location /flask/ {
-        proxy_pass http://127.0.0.1:4000/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-EOF_NGINX'
+          sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo nginx -t
+          sudo systemctl restart nginx
 
-# Set up nginx
-sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
+          sudo bash -c "cat > /etc/systemd/system/chatbot-fastapi.service << EOF
+          [Unit]
+          Description=CHATBOT FastAPI Service
+          After=network.target
 
-# Create fastapi service
-sudo bash -c "cat > /etc/systemd/system/chatbot-fastapi.service << EOF
-[Unit]
-Description=CHATBOT FastAPI Service
-After=network.target
+          [Service]
+          User=${currentuser}
+          Group=${currentuser}
+          WorkingDirectory=/var/www/CHATBOT
+          ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
+          Restart=always
 
-[Service]
-User=${currentuser}
-Group=${currentuser}
-WorkingDirectory=/var/www/CHATBOT
-Environment=\"PATH=/var/www/CHATBOT/venv/bin:/usr/bin\"
-Environment=\"PYTHONPATH=/var/www/CHATBOT:/usr/lib/python3/dist-packages\"
-ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 app:api --timeout 120
-Restart=always
+          [Install]
+          WantedBy=multi-user.target
+          EOF"
 
-[Install]
-WantedBy=multi-user.target
-EOF"
+          sudo bash -c "cat > /etc/systemd/system/chatbot-flask.service << EOF
+          [Unit]
+          Description=CHATBOT Flask API Service
+          After=network.target
 
-# Create flask service
-sudo bash -c "cat > /etc/systemd/system/chatbot-flask.service << EOF
-[Unit]
-Description=CHATBOT Flask API Service
-After=network.target
+          [Service]
+          User=${currentuser}
+          Group=${currentuser}
+          WorkingDirectory=/var/www/CHATBOT
+          ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:4000 api:app --timeout 120
+          Restart=always
 
-[Service]
-User=${currentuser}
-Group=${currentuser}
-WorkingDirectory=/var/www/CHATBOT
-Environment=\"PATH=/var/www/CHATBOT/venv/bin:/usr/bin\"
-Environment=\"PYTHONPATH=/var/www/CHATBOT:/usr/lib/python3/dist-packages\"
-ExecStart=/var/www/CHATBOT/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:4000 api:app --timeout 120
-Restart=always
+          [Install]
+          WantedBy=multi-user.target
+          EOF"
 
-[Install]
-WantedBy=multi-user.target
-EOF"
+          sudo systemctl daemon-reload
+          sudo systemctl enable chatbot-fastapi.service chatbot-flask.service
+          sudo systemctl start chatbot-fastapi.service chatbot-flask.service
 
-# Start the applications
-sudo systemctl daemon-reload
-sudo systemctl enable chatbot-fastapi.service chatbot-flask.service
-sudo systemctl start chatbot-fastapi.service chatbot-flask.service
-
-# Check status
-echo "=== Deployment complete ==="
-echo "FastAPI service status:"
-sudo systemctl status chatbot-fastapi.service --no-pager
-echo "Flask API service status:"
-sudo systemctl status chatbot-flask.service --no-pager
-EOF
+          echo "=== Deployment complete ==="
+          sudo systemctl status chatbot-fastapi.service --no-pager
+          sudo systemctl status chatbot-flask.service --no-pager
+          EOF
           chmod +x scripts/deploy.sh
 
-      # Package the code for deployment
       - name: Package code
         run: tar --warning=no-file-changed -czf deploy.tar.gz --exclude='.git' --exclude='.github' .
 
-      # Deploy to EC2 instance
       - name: Deploy to EC2
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          # Check connectivity
           if timeout 10 bash -c "</dev/tcp/$EC2_HOST/22"; then
-            # Copy files to EC2
             scp -o ConnectTimeout=10 deploy.tar.gz $EC2_USERNAME@$EC2_HOST:~/
-            
-            # Execute deployment script
-            ssh -o ConnectTimeout=30 $EC2_USERNAME@$EC2_HOST "mkdir -p ~/deployment && tar -xzf deploy.tar.gz -C ~/deployment && cd ~/deployment && chmod +x ./scripts/deploy.sh && ./scripts/deploy.sh && cd ~ && rm -rf deploy.tar.gz deployment"
-            
+            ssh -o ConnectTimeout=30 $EC2_USERNAME@$EC2_HOST "
+              mkdir -p ~/deployment && 
+              tar -xzf deploy.tar.gz -C ~/deployment &&
+              cd ~/deployment &&
+              chmod +x ./scripts/deploy.sh &&
+              ./scripts/deploy.sh &&
+              cd ~ &&
+              rm -rf deploy.tar.gz deployment"
             echo "Deployment completed successfully"
           else
             echo "Could not connect to EC2 instance at $EC2_HOST"
-            echo "Deployment skipped due to connectivity issues"
             exit 1
           fi
