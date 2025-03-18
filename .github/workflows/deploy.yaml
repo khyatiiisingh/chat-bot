@@ -19,11 +19,16 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
 
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-            cd /var/www/chatbot  # Ensure this is your project directory
+            set -e
+            cd /var/www/chatbot || exit 1
+            git fetch --all
+            git reset --hard origin/main
             git pull origin main
-            source venv/bin/activate  # Activate virtual environment
-            pip install --no-cache-dir -r requirements.txt  # Install dependencies
-            sudo systemctl restart chatbot  # Restart the service
+            
+            chmod +x deploy.sh  # Ensure script is executable
+            ./deploy.sh         # Run the deployment script
           EOF
