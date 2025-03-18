@@ -92,9 +92,8 @@ else
     pip install flask fastapi uvicorn gunicorn python-dotenv
 fi
 
-# Configure Nginx
-log_info "Configuring Nginx"
-sudo tee /etc/nginx/sites-available/chatbot > /dev/null << NGINX_CONF
+# Save Nginx config to temp file and then move it
+cat > /tmp/nginx_conf << EOF
 server {
     listen 80;
     server_name _;
@@ -115,15 +114,17 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-NGINX_CONF
+EOF
 
+log_info "Configuring Nginx"
+sudo mv /tmp/nginx_conf /etc/nginx/sites-available/chatbot
 sudo ln -sf /etc/nginx/sites-available/chatbot /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl restart nginx
 
 # Create systemd service for FastAPI
 log_info "Creating FastAPI service"
-sudo tee /etc/systemd/system/chatbot-fastapi.service > /dev/null << FASTAPI_SERVICE
+cat > /tmp/fastapi_service << EOF
 [Unit]
 Description=CHATBOT FastAPI Service
 After=network.target
@@ -138,11 +139,12 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-FASTAPI_SERVICE
+EOF
+sudo mv /tmp/fastapi_service /etc/systemd/system/chatbot-fastapi.service
 
 # Create systemd service for Flask
 log_info "Creating Flask service"
-sudo tee /etc/systemd/system/chatbot-flask.service > /dev/null << FLASK_SERVICE
+cat > /tmp/flask_service << EOF
 [Unit]
 Description=CHATBOT Flask API Service
 After=network.target
@@ -157,7 +159,8 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-FLASK_SERVICE
+EOF
+sudo mv /tmp/flask_service /etc/systemd/system/chatbot-flask.service
 
 # Start and enable services
 log_info "Starting services"
