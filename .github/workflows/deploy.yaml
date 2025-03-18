@@ -9,12 +9,43 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup SSH
+      - name: Debug Environment
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          echo "Running as user: $(whoami)"
+          echo "Home directory: $HOME"
+          echo "Working directory: $(pwd)"
+          ls -la ~/
+
+      - name: Setup SSH with improved error handling
+        run: |
+          mkdir -p ~/.ssh || echo "Failed to create ~/.ssh directory"
+          echo "Created ~/.ssh directory"
+
+          # Check if secret exists before using it
+          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "Error: EC2_SSH_KEY secret is not set"
+            exit 1
+          fi
+
+          # Write SSH key with careful error handling
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa || { echo "Failed to write SSH key"; exit 1; }
+          echo "Wrote SSH key to ~/.ssh/id_rsa"
+
+          # Set permissions with error handling
+          chmod 600 ~/.ssh/id_rsa || { echo "Failed to set permissions on SSH key"; exit 1; }
+          echo "Set permissions on SSH key"
+
+          # Add host to known_hosts with error handling
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "Error: EC2_HOST secret is not set"
+            exit 1
+          fi
+
+          ssh-keyscan "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts || { echo "Failed to add host to known_hosts"; exit 1; }
+          echo "Added host to known_hosts"
+
+          # Test SSH configuration
+          ls -la ~/.ssh/
 
       - name: Create environment file
         run: |
@@ -394,15 +425,31 @@ jobs:
           scikit-learn>=1.3.0
           EOF
 
+      - name: Test SSH connection
+        run: |
+          if [ -z "${{ secrets.EC2_USERNAME }}" ] || [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "Error: EC2_USERNAME or EC2_HOST secrets are not set"
+            exit 1
+          fi
+
+          echo "Testing SSH connection to ${{ secrets.EC2_HOST }}"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
+
       - name: Copy files to EC2
         run: |
-          scp -o StrictHostKeyChecking=no -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
+          echo "Starting file copy to EC2..."
+          scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r app.py transcription.py requirements.txt env deploy.sh cleaned_transcript.txt combined_transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/
+          echo "File copy completed"
 
       - name: Run deployment
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
+          echo "Running deployment script on EC2..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ./deploy.sh && ./deploy.sh"
+          echo "Deployment script execution completed"
 
       - name: Cleanup
         if: always()
         run: |
+          echo "Cleaning up SSH key..."
           rm -f ~/.ssh/id_rsa
+          echo "Cleanup completed"
