@@ -12,5 +12,5 @@ gradio>=4.0.0
 # For the Flask API implementation
 flask>=2.2.0
 
-# Optional: for better performance with sentence-transformers
+# Optional: for better performance with sentence-transformers 
 torch>=2.0.0
