@@ -97,9 +97,10 @@ def search_transcript(query):
     
     # Return top 3 chunks
     relevant_chunks = [chunk for _, score, chunk in scored_chunks[:3] if score > 0]
+    
+    # If no relevant chunks found, return empty string instead of filler content
     if not relevant_chunks:
-        # If no matches, return first few chunks as context
-        relevant_chunks = [chunks[i] for i in range(min(3, len(chunks)))]
+        return ""
     
     return " ".join(relevant_chunks)
 
@@ -115,13 +116,32 @@ def generate_response(query):
             model = genai.GenerativeModel("gemini-1.5-pro-latest")
             
             relevant_text = search_transcript(query)
-            prompt = f"""
-            You are an AI tutor. Answer the following question based on the given lecture transcript:
             
-            Lecture Context: {relevant_text}
+            # Check if search found anything useful
+            if not relevant_text or len(relevant_text.strip()) < 50:
+                # Use general knowledge prompt if no relevant content found
+                prompt = f"""
+                You are an expert AI tutor specializing in construction, engineering, materials science, and related fields.
+                Answer the following question thoroughly and authoritatively based on your knowledge:
+                
+                Question: {query}
+                
+                Important: Provide a complete, accurate, and educational answer. Do not mention that you don't have specific information.
+                If this is about concrete, cement, construction materials, or related topics, provide detailed technical information.
+                """
+            else:
+                # Use transcript-based prompt if relevant content found
+                prompt = f"""
+                You are an expert AI tutor. Answer the following question based on the given information:
+                
+                Lecture Context: {relevant_text}
+                
+                Question: {query}
+                
+                Important: If the lecture context doesn't fully address the question, supplement with your knowledge to provide a complete answer.
+                Never say "the provided text doesn't contain information" - instead, provide the best answer you can.
+                """
             
-            Question: {query}
-            """
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
