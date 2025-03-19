@@ -1,12 +1,7 @@
 from flask import Flask, request, jsonify
 import google.generativeai as genai
-from sentence_transformers import SentenceTransformer
-import faiss
-import numpy as np
 import os
 import re
-import nltk
-from nltk.tokenize import sent_tokenize
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -41,9 +36,7 @@ def get_next_api_key():
     CURRENT_KEY_INDEX = (CURRENT_KEY_INDEX + 1) % len(API_KEYS)
     return API_KEYS[CURRENT_KEY_INDEX]
 
-nltk.download('punkt')
-nltk.download('punkt_tab')
-
+# File paths
 TRANSCRIPT_FILE = "transcript.txt"
 
 def clean_text(text):
@@ -51,40 +44,64 @@ def clean_text(text):
     text = text.replace("\n", " ")
     return text.strip()
 
-with open(TRANSCRIPT_FILE, "r", encoding="utf-8") as f:
-    transcript_text = f.read()
+# Load transcript
+try:
+    with open(TRANSCRIPT_FILE, "r", encoding="utf-8") as f:
+        transcript_text = f.read()
+    cleaned_text = clean_text(transcript_text)
+except Exception as e:
+    print(f"Warning: Could not read transcript file: {str(e)}")
+    cleaned_text = "No transcript available."
 
-cleaned_text = clean_text(transcript_text)
-sentences = sent_tokenize(cleaned_text)
-
-chunk_size = 500
-chunks = []
-current_chunk = ""
-
-for sentence in sentences:
-    if len(current_chunk) + len(sentence) < chunk_size:
-        current_chunk += " " + sentence
-    else:
+# Create chunks without requiring NLTK
+def simple_chunk_text(text, chunk_size=500):
+    # Split by periods, question marks, and exclamation points
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    
+    chunks = []
+    current_chunk = ""
+    
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) < chunk_size:
+            current_chunk += " " + sentence
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence
+    
+    if current_chunk:
         chunks.append(current_chunk.strip())
-        current_chunk = sentence
+        
+    return chunks
 
-if current_chunk:
-    chunks.append(current_chunk.strip())
+# Create chunks
+chunks = simple_chunk_text(cleaned_text)
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-chunk_embeddings = np.array([embedding_model.encode(chunk) for chunk in chunks])
-chunk_map = {i: chunks[i] for i in range(len(chunks))}
-
-dimension = chunk_embeddings.shape[1]
-index = faiss.IndexFlatL2(dimension)
-index.add(chunk_embeddings)
-
+# Simple search function (without embeddings)
 def search_transcript(query):
-    query_embedding = embedding_model.encode([query])
-    k = 3
-    distances, indices = index.search(query_embedding, k)
-    relevant_chunks = [chunk_map[idx] for idx in indices[0] if idx >= 0 and idx < len(chunks)]
-    return " ".join(relevant_chunks) if relevant_chunks else "No relevant text found."
+    # Simple keyword-based search
+    query_terms = query.lower().split()
+    scored_chunks = []
+    
+    for i, chunk in enumerate(chunks):
+        score = 0
+        chunk_lower = chunk.lower()
+        for term in query_terms:
+            if term in chunk_lower:
+                score += 1
+        
+        scored_chunks.append((i, score, chunk))
+    
+    # Sort by score
+    scored_chunks.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return top 3 chunks
+    relevant_chunks = [chunk for _, score, chunk in scored_chunks[:3] if score > 0]
+    if not relevant_chunks:
+        # If no matches, return first few chunks as context
+        relevant_chunks = [chunks[i] for i in range(min(3, len(chunks)))]
+    
+    return " ".join(relevant_chunks)
 
 def generate_response(query):
     global CURRENT_KEY_INDEX
@@ -117,7 +134,7 @@ def generate_response(query):
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Welcome to the Dhamm AI Chatbot API! Use /ask?query=your_question to get answers."
+    return "Welcome to the Dhamm AI Chatbot API! Use /ask endpoint with a POST request to get answers."
 
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -129,6 +146,10 @@ def ask():
     response = generate_response(query)
     return jsonify({"answer": response})
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({"status": "healthy"}), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=4000, debug=True)
+    app.run(host="0.0.0.0", port=4000, debug=False)
