@@ -15,11 +15,20 @@ GOOGLE_API_KEY_3=your_key_3
 GOOGLE_API_KEY_4=your_key_4
 EOF
 
-# Create sample transcript file if it doesn't exist
-if [ ! -f "transcript.txt" ]; then
-    echo "Creating empty transcript file for testing..."
-    echo "This is a sample transcript for testing the chatbot API." > transcript.txt
-fi
+# Create comprehensive transcript file with actual content
+cat > transcript.txt << 'EOF'
+Concrete is a composite material composed of fine and coarse aggregate bonded together with a fluid cement paste that hardens over time. Concrete is the second-most-used substance in the world after water and is the most widely used building material.
+
+In its hardened state, concrete is an aggregation of stones (or similar hard material) embedded in cement-sand mortar. This mortar is formed by combining cement, water, and fine aggregate like sand or stone dust. Larger pieces of aggregate, such as crushed stones, are also included in the mix. Therefore, conventional concrete is made up of cement + water + sand/stone dust + coarse aggregate (stones).
+
+Cement is a binder, a substance used for construction that sets, hardens, and adheres to other materials to bind them together. Cement is seldom used on its own, but rather to bind sand and gravel together. Cement mixed with fine aggregate produces mortar, and cement mixed with sand and gravel produces concrete.
+
+Portland cement is the most common type of cement in general use around the world as a basic ingredient of concrete, mortar, stucco, and non-specialty grout. It was developed from other types of hydraulic lime in England in the early 19th century by Joseph Aspdin, and is usually made from limestone.
+
+The most important properties of concrete are: workability, cohesiveness, strength, and durability. Workability refers to the ease with which concrete can be mixed, transported, placed, compacted, and finished. Cohesiveness refers to the ability of concrete to hold all ingredients together. Strength refers to the ability of concrete to resist stress without failure. Durability refers to the ability of concrete to resist weathering action, chemical attack, and abrasion.
+
+The water-cement ratio is the ratio of the weight of water to the weight of cement used in a concrete mix. A lower ratio leads to higher strength and durability, but may make the mix difficult to work with and form. Workability can be managed by adding chemical admixtures without changing the water-cement ratio.
+EOF
 
 # Create the API file
 cat > api.py << 'EOF'
@@ -67,6 +76,7 @@ try:
     with open(TRANSCRIPT_FILE, "r", encoding="utf-8") as f:
         transcript_text = f.read()
     cleaned_text = clean_text(transcript_text)
+    print(f"Successfully loaded transcript with {len(cleaned_text)} characters")
 except Exception as e:
     print(f"Warning: Could not read transcript file: {str(e)}")
     cleaned_text = "No transcript available."
@@ -94,6 +104,7 @@ def simple_chunk_text(text, chunk_size=500):
 
 # Create chunks
 chunks = simple_chunk_text(cleaned_text)
+print(f"Created {len(chunks)} chunks from transcript")
 
 # Simple search function (without embeddings)
 def search_transcript(query):
@@ -133,13 +144,22 @@ def generate_response(query):
             model = genai.GenerativeModel("gemini-1.5-pro-latest")
             
             relevant_text = search_transcript(query)
-            prompt = f"""
-            You are an AI tutor. Answer the following question based on the given lecture transcript:
             
-            Lecture Context: {relevant_text}
+            # Use an improved prompt that encourages more authoritative answers
+            prompt = f"""
+            You are an expert AI tutor specializing in construction and engineering materials.
+            
+            IMPORTANT INSTRUCTIONS:
+            1. Provide detailed, authoritative answers about construction materials
+            2. Use the knowledge below if relevant to the question
+            3. NEVER say "the transcript doesn't contain information" - instead, provide your best answer
+            4. If asked about concrete, cement, or construction materials, always give a thorough technical explanation
+            
+            Knowledge from lecture transcript: {relevant_text}
             
             Question: {query}
             """
+            
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
@@ -222,6 +242,6 @@ sudo systemctl status chatbot --no-pager
 echo ""
 echo "Setup complete! Your chatbot API should now be running."
 echo "You can test it with:"
-echo "curl -X POST -H \"Content-Type: application/json\" -d '{\"query\":\"What is this lecture about?\"}' http://localhost:4000/ask"
+echo "curl -X POST -H \"Content-Type: application/json\" -d '{\"query\":\"What is concrete?\"}' http://localhost:4000/ask"
 echo ""
 echo "Don't forget to update your API keys in the .env file!"
