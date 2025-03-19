@@ -30,19 +30,23 @@ The most important properties of concrete are: workability, cohesiveness, streng
 The water-cement ratio is the ratio of the weight of water to the weight of cement used in a concrete mix. A lower ratio leads to higher strength and durability, but may make the mix difficult to work with and form. Workability can be managed by adding chemical admixtures without changing the water-cement ratio.
 EOF
 
-# Create the API file
+# Create the API file with CORS support
 cat > api.py << 'EOF'
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 import os
 import re
 from dotenv import load_dotenv
+from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Enable CORS for all routes
+CORS(app)
 
 # Get API keys
 def get_api_keys():
@@ -184,6 +188,11 @@ def ask():
     response = generate_response(query)
     return jsonify({"answer": response})
 
+# Add OPTIONS method handler for preflight requests
+@app.route("/ask", methods=["OPTIONS"])
+def options_ask():
+    return "", 200
+
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
@@ -191,6 +200,14 @@ def health_check():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=4000, debug=False)
+EOF
+
+# Create requirements.txt file with Flask-CORS
+cat > requirements.txt << 'EOF'
+flask>=2.2.0
+google-generativeai>=0.3.0
+python-dotenv>=1.0.0
+flask-cors>=3.0.0
 EOF
 
 # Set up Python virtual environment
@@ -205,9 +222,9 @@ echo "Creating virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
 
-# Install minimal dependencies
+# Install dependencies from requirements.txt
 echo "Installing dependencies..."
-pip install flask google-generativeai python-dotenv
+pip install -r requirements.txt
 
 # Create a systemd service file
 echo "Creating systemd service..."

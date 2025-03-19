@@ -3,12 +3,16 @@ import google.generativeai as genai
 import os
 import re
 from dotenv import load_dotenv
+from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Enable CORS for all routes
+CORS(app)
 
 # Get API keys
 def get_api_keys():
@@ -165,6 +169,11 @@ def ask():
     query = data["query"]
     response = generate_response(query)
     return jsonify({"answer": response})
+
+# Add OPTIONS method handler for preflight requests
+@app.route("/ask", methods=["OPTIONS"])
+def options_ask():
+    return "", 200
 
 @app.route("/health", methods=["GET"])
 def health_check():

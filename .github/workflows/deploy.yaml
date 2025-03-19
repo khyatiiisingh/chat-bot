@@ -57,6 +57,15 @@ jobs:
           echo "GOOGLE_API_KEY_3=${{ secrets.GOOGLE_API_KEY_3 }}" >> .env
           echo "GOOGLE_API_KEY_4=${{ secrets.GOOGLE_API_KEY_4 }}" >> .env
 
+      - name: Create requirements.txt with Flask-CORS
+        run: |
+          cat > requirements.txt << 'EOF'
+          flask>=2.2.0
+          google-generativeai>=0.3.0
+          python-dotenv>=1.0.0
+          flask-cors>=3.0.0
+          EOF
+
       - name: Copy files to EC2
         run: |
           # Create remote directory if not exists
@@ -74,7 +83,7 @@ jobs:
             scp transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
           fi
 
-          # Copy requirements
+          # Copy requirements with Flask-CORS
           scp requirements.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
 
       - name: Deploy to EC2
