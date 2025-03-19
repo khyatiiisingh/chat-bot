@@ -11,8 +11,12 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
-# Enable CORS for all routes
-CORS(app)
+# Enable CORS with specific settings
+CORS(app, resources={r"/*": {
+    "origins": "https://kiit-lms.vercel.app",
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"]
+}})
 
 # Get API keys
 def get_api_keys():
