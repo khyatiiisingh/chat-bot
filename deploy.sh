@@ -2,60 +2,55 @@
 set -e  # Exit immediately if a command fails
 
 # Configuration variables
-APP_DIR="/var/www/chatbot"    # Update this with your actual project directory
-VENV_DIR="$APP_DIR/venv"      # Virtual environment directory
-SERVICE_NAME="chatbot"        # Systemd service name
-GIT_BRANCH="main"             # Git branch to deploy
-REPO_URL="https://github.com/Venktesh123/chat-boat.git" # Update with your actual repo URL
+APP_DIR=${APP_DIR:-"/var/www/chatbot"}
+VENV_DIR=${VENV_DIR:-"$APP_DIR/venv"}
+SERVICE_NAME=${SERVICE_NAME:-"chatbot"}
 
-echo "Starting deployment process..."
-
-# Create app directory if it doesn't exist
-if [ ! -d "$APP_DIR" ]; then
-    echo "Creating application directory..."
-    mkdir -p $APP_DIR
-    cd $APP_DIR
-    git clone $REPO_URL .
-else
-    # Navigate to the application directory
-    cd $APP_DIR || exit 1
-    echo "Pulling latest changes from Git..."
-    git fetch --all
-    git reset --hard origin/$GIT_BRANCH
+# Make sure the script is being run with the right permissions
+if [ "$EUID" -ne 0 ] && [ ! -w "/etc/systemd/system" ]; then
+    echo "Please run as root or with sudo privileges"
+    exit 1
 fi
 
-# Ensure virtual environment exists
+echo "Starting deployment..."
+
+# Create working directory if it doesn't exist
+mkdir -p $APP_DIR
+
+# Set working directory
+cd $APP_DIR
+
+# Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Virtual environment not found! Creating one..."
+    echo "Creating virtual environment..."
     python3 -m venv $VENV_DIR
 fi
 
-# Activate the virtual environment
+# Activate virtual environment
 echo "Activating virtual environment..."
 source $VENV_DIR/bin/activate
 
 # Install dependencies
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install --no-cache-dir -r requirements.txt
-
-# Set environment variables from GitHub secrets
-echo "Setting up environment variables..."
-# You may need to create a .env file or configure these in your systemd service
-# These are the secrets visible in your GitHub repository
-if [ -f .env ]; then
-    echo "Updating .env file..."
-else
-    echo "Creating .env file..."
-    touch .env
+if [ -f requirements.txt ]; then
+    pip install --no-cache-dir -r requirements.txt
 fi
 
-# Create or update systemd service if it doesn't exist
-if [ ! -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
-    echo "Creating systemd service..."
-    cat > /tmp/$SERVICE_NAME.service << EOF
+# Make sure nltk data is downloaded
+python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+# Create empty transcript file if it doesn't exist
+if [ ! -f "transcript.txt" ]; then
+    echo "Creating empty transcript.txt file..."
+    echo "Sample transcript content for testing deployment." > transcript.txt
+fi
+
+# Create systemd service file
+echo "Creating systemd service file..."
+cat > /tmp/$SERVICE_NAME.service << EOF
 [Unit]
-Description=Chatbot Service
+Description=Chatbot AI Service
 After=network.target
 
 [Service]
@@ -69,10 +64,16 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
-    sudo mv /tmp/$SERVICE_NAME.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable $SERVICE_NAME
-fi
+# Move service file to systemd
+sudo mv /tmp/$SERVICE_NAME.service /etc/systemd/system/
+
+# Reload systemd daemon
+echo "Reloading systemd daemon..."
+sudo systemctl daemon-reload
+
+# Enable service
+echo "Enabling service..."
+sudo systemctl enable $SERVICE_NAME
 
 # Restart the application using systemd
 echo "Restarting the application service..."

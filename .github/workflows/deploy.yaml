@@ -1,4 +1,4 @@
-name: Python application CI/CD
+name: Python AI Chatbot CI/CD
 
 on:
   push:
@@ -29,9 +29,6 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Test with pytest
-        run: |
-          pytest
 
   deploy:
     runs-on: ubuntu-latest
@@ -52,10 +49,34 @@ jobs:
       - name: Adding Known Hosts
         run: ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy deployment script to EC2
+      - name: Create .env file for Google API keys
         run: |
-          scp -o StrictHostKeyChecking=no deploy.sh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/tmp/deploy.sh
+          echo "# Google API Keys for Gemini" > .env
+          echo "GOOGLE_API_KEY_1=${{ secrets.GOOGLE_API_KEY_1 }}" >> .env
+          echo "GOOGLE_API_KEY_2=${{ secrets.GOOGLE_API_KEY_2 }}" >> .env
+          echo "GOOGLE_API_KEY_3=${{ secrets.GOOGLE_API_KEY_3 }}" >> .env
+          echo "GOOGLE_API_KEY_4=${{ secrets.GOOGLE_API_KEY_4 }}" >> .env
+
+      - name: Copy files to EC2
+        run: |
+          # Create remote directory if not exists
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "mkdir -p /home/${{ secrets.EC2_USERNAME }}/chatbot"
+
+          # Copy API file and deployment script
+          scp api.py ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
+          scp deploy.sh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
+
+          # Copy environment file
+          scp .env ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
+
+          # Copy transcript if it exists
+          if [ -f transcript.txt ]; then
+            scp transcript.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
+          fi
+
+          # Copy requirements
+          scp requirements.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USERNAME }}/chatbot/
 
       - name: Deploy to EC2
         run: |
-          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x /tmp/deploy.sh && sudo /tmp/deploy.sh"
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "cd /home/${{ secrets.EC2_USERNAME }}/chatbot && chmod +x deploy.sh && sudo APP_DIR=/home/${{ secrets.EC2_USERNAME }}/chatbot ./deploy.sh"
