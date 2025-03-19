@@ -2,8 +2,13 @@ from flask import Flask, request, jsonify
 import google.generativeai as genai
 import os
 import re
+import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
+import urllib3
+
+# Disable SSL verification warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load environment variables
 load_dotenv()
@@ -112,6 +117,22 @@ def search_transcript(query):
     
     return " ".join(relevant_chunks)
 
+# Modified to handle SSL verification errors in requests
+def make_safe_request(url, json_data=None, method="POST"):
+    try:
+        if method == "POST":
+            response = requests.post(url, json=json_data, verify=False)
+        else:
+            response = requests.get(url, verify=False)
+        return response
+    except requests.exceptions.SSLError as e:
+        print(f"SSL Error: {str(e)}")
+        # Try again with verification disabled
+        return requests.post(url, json=json_data, verify=False) if method == "POST" else requests.get(url, verify=False)
+    except Exception as e:
+        print(f"Request error: {str(e)}")
+        return None
+
 def generate_response(query):
     global CURRENT_KEY_INDEX
     if not API_KEYS:
@@ -121,6 +142,8 @@ def generate_response(query):
         try:
             current_key = API_KEYS[CURRENT_KEY_INDEX]
             genai.configure(api_key=current_key)
+            
+            # Configure to ignore SSL certificate issues if needed
             model = genai.GenerativeModel("gemini-1.5-pro-latest")
             
             relevant_text = search_transcript(query)
@@ -184,5 +207,14 @@ def health_check():
     """Health check endpoint"""
     return jsonify({"status": "healthy"}), 200
 
+# Function to customize the SSL context for the Flask app
+def create_ssl_context():
+    import ssl
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=4000, debug=False)
+    # For local development with SSL verification disabled
+    app.run(host="0.0.0.0", port=4000, debug=False, ssl_context=create_ssl_context())
