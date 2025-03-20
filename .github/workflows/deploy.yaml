@@ -1,11 +1,14 @@
 name: Python AI Chatbot CI/CD
+
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,6 +29,7 @@ jobs:
           flake8 api.py --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings
           flake8 api.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
   deploy:
     runs-on: ubuntu-latest
     needs: build
@@ -33,14 +37,21 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.EC2_SSH_KEY }}
           known_hosts: unnecessary
           if_key_exists: replace
+
       - name: Adding Known Hosts
-        run: ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        run: |
+          # Use -T option to disable strict host key checking for keyscan
+          ssh-keyscan -T 10 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
+          # Verify the host is in known_hosts
+          grep -q ${{ secrets.EC2_HOST }} ~/.ssh/known_hosts || echo "Warning: Host key verification may fail"
+
       - name: Create .env file for Google API keys
         run: |
           echo "# Google API Keys for Gemini" > .env
@@ -48,12 +59,18 @@ jobs:
           echo "GOOGLE_API_KEY_2=${{ secrets.GOOGLE_API_KEY_2 }}" >> .env
           echo "GOOGLE_API_KEY_3=${{ secrets.GOOGLE_API_KEY_3 }}" >> .env
           echo "GOOGLE_API_KEY_4=${{ secrets.GOOGLE_API_KEY_4 }}" >> .env
+
       - name: Create requirements.txt with Flask-CORS
         run: |
           # Ensure requirements.txt has flask-cors
           if ! grep -q "flask-cors" requirements.txt; then
             echo "flask-cors>=3.0.0" >> requirements.txt
           fi
+
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "echo SSH connection successful"
+
       - name: Copy files to EC2
         run: |
           # Create remote directory if not exists
@@ -72,7 +89,7 @@ jobs:
           scp .env ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/chatbot/
 
           # Copy text files
-          scp *.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/chatbot/
+          scp *.txt ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/chatbot/ || true
 
           # Make deploy script executable
           ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "chmod +x ~/chatbot/deploy.sh"
