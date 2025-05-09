@@ -1,145 +1,148 @@
 import os
+import sys
+import traceback
 from dotenv import load_dotenv
-from transcription import initialize_conversation_chain, process_question
-import uvicorn
+import streamlit as st
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import sys
-import traceback
+import uvicorn
+
+# LangChain + Gemini + FAISS
+from langchain.embeddings import GoogleGenerativeAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chat_models import ChatGoogleGenerativeAI
+from langchain.docstore.document import Document
 
 # Load environment variables
 load_dotenv()
-
-# Retrieve Google API Key from environment variable
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# Main Streamlit app
+# Globals
+conversation_chain = None
+
+# Utility to build vectorstore
+def build_vectorstore():
+    if not os.path.exists("transcript.txt"):
+        raise FileNotFoundError("transcript.txt not found in the project directory.")
+
+    with open("transcript.txt", "r", encoding="utf-8") as f:
+        full_text = f.read()
+
+    # Split into chunks
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    documents = splitter.split_documents([Document(page_content=full_text)])
+
+    # Create embeddings
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    vectorstore = FAISS.from_documents(documents, embedding=embeddings)
+    return vectorstore
+
+# Initialize conversation chain
+def initialize_conversation_chain():
+    vectorstore = build_vectorstore()
+    retriever = vectorstore.as_retriever()
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+    chain = ConversationalRetrievalChain.from_llm(
+        llm=ChatGoogleGenerativeAI(model="gemini-pro", temperature=0),
+        retriever=retriever,
+        memory=memory,
+        return_source_documents=True
+    )
+    return chain
+
+# Process user question
+def process_question(chain, question):
+    response = chain.invoke({"question": question})
+    return {
+        "answer": response["answer"],
+        "chat_history": chain.memory.chat_memory.messages
+    }
+
+# ---------- Streamlit UI ----------
 def main():
     st.set_page_config(page_title="Lecture Chatbot", page_icon=":books:")
-    
+
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    
+
     st.header("Lecture Chatbot :books:")
-    
-    # Check if API key is available
+
     if not GOOGLE_API_KEY:
-        st.error("Google API Key is missing! Set it as an environment variable.")
+        st.error("Google API Key is missing! Set it in .env")
         st.stop()
-    
-    # Initialize conversation (only once)
+
     if st.session_state.conversation is None:
-        with st.spinner("Loading transcript..."):
+        with st.spinner("Loading transcript and building vector index..."):
             try:
-                st.session_state.conversation = initialize_conversation_chain(GOOGLE_API_KEY)
-                if st.session_state.conversation:
-                    st.success("Transcript loaded successfully!")
-                else:
-                    st.error("Transcript file 'cleaned_transcript.txt' not found!")
-                    st.stop()
+                st.session_state.conversation = initialize_conversation_chain()
+                st.success("Transcript loaded and vector index created!")
             except Exception as e:
-                st.error(f"Error initializing conversation: {str(e)}")
+                st.error(f"Error: {str(e)}")
                 st.stop()
-    
-    # User input for questions
+
     user_question = st.text_input("Ask a question about the lecture:")
     if user_question and st.session_state.conversation:
-        # Process the question
-        with st.spinner("Processing your question..."):
+        with st.spinner("Thinking..."):
             try:
                 response = process_question(st.session_state.conversation, user_question)
-                
-                # Update chat history
-                st.session_state.chat_history = response['chat_history']
-                
-                # Display the response
+                st.session_state.chat_history = response["chat_history"]
+
                 st.write(f"**Question:** {user_question}")
                 st.write(f"**Answer:** {response['answer']}")
-                
-                # Display chat history (optional)
-                if st.checkbox("Show chat history"):
-                    for i, message in enumerate(st.session_state.chat_history):
-                        if i % 2 == 0:
-                            st.write(f"**User:** {message.content}")
-                        else:
-                            st.write(f"**Bot:** {message.content}")
-                        st.write("---")
-            except Exception as e:
-                st.error(f"Error processing question: {str(e)}")
 
-# Create FastAPI app
+                if st.checkbox("Show chat history"):
+                    for i, msg in enumerate(st.session_state.chat_history):
+                        speaker = "User" if i % 2 == 0 else "Bot"
+                        st.markdown(f"**{speaker}:** {msg.content}")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+
+# ---------- FastAPI API ----------
 api = FastAPI(title="Lecture Chatbot API")
 
-# Define request model
 class QuestionRequest(BaseModel):
     question: str
-
-# Global conversation chain
-conversation_chain = None
-
-# Error handler
-@api.exception_handler(Exception)
-async def universal_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-    )
 
 @api.on_event("startup")
 async def startup_event():
     global conversation_chain
     try:
-        # Load environment variables
-        load_dotenv()
-        # Get API key
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            print("Error: Google API Key is missing")
+        if not GOOGLE_API_KEY:
             raise Exception("Google API Key is missing")
-            
-        # Initialize conversation chain
-        print("Initializing conversation chain...")
-        conversation_chain = initialize_conversation_chain(api_key)
-        
-        if not conversation_chain:
-            print("Error: Failed to initialize conversation chain")
-            raise Exception("Failed to initialize conversation chain")
-            
-        print("Conversation chain initialized successfully")
+        conversation_chain = initialize_conversation_chain()
     except Exception as e:
-        print(f"Startup error: {str(e)}")
+        print("Startup error:", e)
         print(traceback.format_exc())
-        raise Exception(f"Startup error: {str(e)}")
+        raise
+
+@api.exception_handler(Exception)
+async def universal_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 @api.post("/api/ask")
 async def ask(request: QuestionRequest):
     global conversation_chain
     if not conversation_chain:
         raise HTTPException(status_code=500, detail="Conversation chain not initialized")
-    
     try:
-        print(f"Processing question: {request.question}")
         response = process_question(conversation_chain, request.question)
-        print(f"Got response: {response['answer']}")
         return {"answer": response["answer"]}
     except Exception as e:
-        print(f"Error processing question: {str(e)}")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Root endpoint
 @api.get("/")
-def read_root():
+def root():
     return {"message": "API is running. Use /api/ask endpoint to ask questions."}
 
 if __name__ == '__main__':
-    # Check if running as a script or imported as a module
     if len(sys.argv) > 1 and sys.argv[1] == "api":
-        # Run FastAPI with uvicorn
         uvicorn.run("app:api", host="0.0.0.0", port=8000, reload=True)
     else:
-        # Run Streamlit app
         main()
